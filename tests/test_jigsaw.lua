@@ -158,4 +158,74 @@ do
     print("PASS: overlap check: occupied slot detected, drop blocked")
 end
 
+-- JigsawBox ---------------------------------------------------------------
+local JigsawBox = require("game/jigsaw_box")
+
+-- JigsawBox.new -----------------------------------------------------------
+
+do
+    local box = JigsawBox.new(128, 128)
+    assert(box.state == "waiting",       "new box should be in state 'waiting'")
+    assert(#box.pieces_to_spawn == 3,    "new box should have 3 items in pieces_to_spawn")
+    print("PASS: jigsaw_box: new() creates box in state 'waiting' with 3 pieces queued")
+end
+
+-- interact() --------------------------------------------------------------
+
+do
+    local box = JigsawBox.new(128, 128)
+    box:interact()
+    assert(box.state == "ejecting", "state should be 'ejecting' after interact()")
+    assert(box.spawn_timer <= 0,    "spawn_timer should be <= 0 after interact()")
+    print("PASS: jigsaw_box: interact() transitions to 'ejecting' and sets spawn_timer <= 0")
+end
+
+-- update() ejects one piece per call -------------------------------------
+
+do
+    local box = JigsawBox.new(128, 128)
+    local pieces = {}
+    box:interact()
+    box:update(1.0, pieces)
+    assert(#pieces == 1,              "one piece should be ejected after first update")
+    assert(box.state == "ejecting",   "state should still be 'ejecting' with 2 pieces remaining")
+    print("PASS: jigsaw_box: update() ejects one piece per large-dt call, state stays 'ejecting'")
+end
+
+-- update() x3 ejects all pieces, state becomes done ---------------------
+
+do
+    local box = JigsawBox.new(128, 128)
+    local pieces = {}
+    box:interact()
+    box:update(1.0, pieces)
+    box:update(1.0, pieces)
+    box:update(1.0, pieces)
+    assert(#pieces == 3,        "three pieces should be ejected after three updates")
+    assert(box.state == "done", "state should be 'done' after all pieces ejected")
+    print("PASS: jigsaw_box: after 3 updates all pieces ejected and state is 'done'")
+end
+
+-- slot search skips occupied slots ----------------------------------------
+
+do
+    local box = JigsawBox.new(128, 192)
+    local bx = box.sprite.x  -- 128
+    local by = box.sprite.y  -- 192
+    -- The first d=1 candidate (sorted by dx then dy) is {-1,0} -> (bx-SLOT, by).
+    -- Block it with a fake grounded piece so the eject must choose something else.
+    local blocked_x = bx - C.SLOT
+    local blocked_y = by
+    local fake_piece = { state = "grounded", sprite = { x = blocked_x, y = blocked_y } }
+    local pieces = { fake_piece }
+    box:interact()
+    box:update(1.0, pieces)
+    -- pieces[2] is the newly ejected piece (pieces[1] is our fake blocker)
+    local new_piece = pieces[2]
+    assert(new_piece ~= nil, "an ejected piece should be appended to pieces")
+    assert(not (new_piece.sprite.x == blocked_x and new_piece.sprite.y == blocked_y),
+        "ejected piece must not land on the occupied slot")
+    print("PASS: jigsaw_box: slot search skips grounded-piece-occupied slots")
+end
+
 print("ALL TESTS PASSED")

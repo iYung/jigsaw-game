@@ -5,17 +5,18 @@ A 2D jigsaw puzzle game built with Love2D.
 ## Gameplay
 
 - **WASD** — move the player
-- **E** — pick up / drop a jigsaw piece (walk within range of a piece on the ground)
+- **E** — interact: open the piece box, or pick up / drop a jigsaw piece
 - **R** — rotate held piece 90°
 - **ESC** — quit
 
-The world is 2560px wide (2 screens). Walk right to find the other two pieces. Dropped pieces snap to the 64px (2U) world grid.
+The world starts with a gold **box** near the player. Press **E** next to it to eject the three jigsaw pieces one by one into adjacent slots. The box disappears once all pieces are out. Dropped pieces snap to the 64px (2U) world grid.
 
 ## Structure
 
 ```
 game/           Game-specific code
   constants.lua   U=32 base unit, SLOT=64 world grid size
+  jigsaw_box.lua   JigsawBox entity (timed piece ejection, Manhattan slot search)
   jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap)
   player.lua      Player movement and piece interaction
   scenes/         GameScene

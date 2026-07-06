@@ -18,10 +18,12 @@ function GameScene:on_enter()
 
     self.world_w = WORLD_W
 
-    self.player = Player.new(-16, 170)
+    local GROUND_Y = 4 * C.SLOT  -- 256, grid-aligned so pieces rest at 3*SLOT=192
+
+    self.player = Player.new(0, GROUND_Y - 48)
     self.drawer:add(self.player, 10)
 
-    self.ground = Sprite.new(0, 220, WORLD_W, 30)
+    self.ground = Sprite.new(0, GROUND_Y, WORLD_W, 30)
     self.ground.color = { 0.25, 0.65, 0.25, 1 }
     self.drawer:add(self.ground, 1)
 

@@ -33,8 +33,22 @@ function Player:update(dt, pieces)
 
     if self.input:pressed("interact") then
         if self.held_piece ~= nil then
-            self.held_piece:drop()
-            self.held_piece = nil
+            local snap_x = math.floor(self.held_piece.sprite.x / C.SLOT + 0.5) * C.SLOT
+            local snap_y = math.floor(self.held_piece.sprite.y / C.SLOT + 0.5) * C.SLOT
+            local occupied = false
+            if pieces then
+                for _, p in ipairs(pieces) do
+                    if p ~= self.held_piece and p.state == "grounded"
+                       and p.sprite.x == snap_x and p.sprite.y == snap_y then
+                        occupied = true
+                        break
+                    end
+                end
+            end
+            if not occupied then
+                self.held_piece:drop()
+                self.held_piece = nil
+            end
         else
             local centre = self:centre()
             local nearest, nearest_dist = nil, math.huge

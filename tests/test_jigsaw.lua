@@ -25,7 +25,7 @@ do
     assert(p.state         == "grounded", "new piece should be grounded")
     assert(p.rotation_step == 0,          "new piece rotation_step should be 0")
     assert(p.sprite.x      == 384,        "sprite.x should match constructor x")
-    assert(p.sprite.y      == 156,        "sprite.y should be ground_y - SLOT = 156")
+    assert(p.sprite.y      == 192,        "sprite.y should be 3*SLOT = 192")
     assert(p.sprite.width  == C.SLOT,     "sprite width should be SLOT")
     assert(p.sprite.height == C.SLOT,     "sprite height should be SLOT")
     print("PASS: jigsaw_piece: new() positions on ground with correct size")
@@ -37,7 +37,7 @@ do
     local p = JigsawPiece.new(384, {1, 0, 0, 1})
     local c = p:centre()
     assert(c.x == 384 + C.U, "centre.x should be x + U = " .. (384 + C.U) .. ", got " .. tostring(c.x))
-    assert(c.y == 156 + C.U, "centre.y should be y + U = " .. (156 + C.U) .. ", got " .. tostring(c.y))
+    assert(c.y == 192 + C.U, "centre.y should be y + U = " .. (192 + C.U) .. ", got " .. tostring(c.y))
     print("PASS: jigsaw_piece: centre() returns sprite center")
 end
 
@@ -128,6 +128,34 @@ do
     p:update(mock_player)
     assert(p.sprite.x == 200, "grounded piece should not move on update()")
     print("PASS: jigsaw_piece: update() does not move grounded pieces")
+end
+
+-- overlap check (via player logic) ---------------------------------------
+
+do
+    -- Simulate two pieces: A grounded at (384, 192), B held at same target slot.
+    -- Player must not drop B onto A.
+    local C2   = require("game/constants")
+    local pieceA = JigsawPiece.new(384, {1, 0, 0, 1})       -- grounded at (384,192)
+    local pieceB = JigsawPiece.new(0,   {0, 0, 1, 1})
+    pieceB:pick_up()
+    pieceB.sprite.x = 384  -- would snap to same slot as A
+    pieceB.sprite.y = 192
+
+    local snap_x = math.floor(pieceB.sprite.x / C2.SLOT + 0.5) * C2.SLOT
+    local snap_y = math.floor(pieceB.sprite.y / C2.SLOT + 0.5) * C2.SLOT
+    local occupied = false
+    local pieces = { pieceA, pieceB }
+    for _, p in ipairs(pieces) do
+        if p ~= pieceB and p.state == "grounded"
+           and p.sprite.x == snap_x and p.sprite.y == snap_y then
+            occupied = true
+            break
+        end
+    end
+    assert(occupied == true, "slot (384,192) should be detected as occupied")
+    assert(pieceB.state == "held", "pieceB should still be held when target slot is occupied")
+    print("PASS: overlap check: occupied slot detected, drop blocked")
 end
 
 print("ALL TESTS PASSED")

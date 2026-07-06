@@ -4,7 +4,7 @@ local C = require("game/constants")
 local JigsawPiece = {}
 JigsawPiece.__index = JigsawPiece
 
-local GROUND_Y = 220 - C.SLOT  -- 156
+local GROUND_Y = 3 * C.SLOT  -- 192 (ground sits at 4*SLOT=256, pieces rest on top)
 
 function JigsawPiece.new(x, color)
     local self = setmetatable({}, JigsawPiece)

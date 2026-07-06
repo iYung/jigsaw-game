@@ -46,7 +46,6 @@ function GameScene:update(dt)
     end
 
     if self.box.state == "done" and not self.box_removed then
-        self.drawer:remove(self.box)
         self.box_removed = true
     end
 

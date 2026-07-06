@@ -33,7 +33,7 @@ function Player:update(dt, pieces)
 
     if self.input:pressed("interact") then
         if self.held_piece ~= nil then
-            self.held_piece:drop(self:centre().x - C.U)
+            self.held_piece:drop()
             self.held_piece = nil
         else
             local centre = self:centre()

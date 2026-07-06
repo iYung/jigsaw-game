@@ -68,22 +68,27 @@ end
 -- drop() grid snap --------------------------------------------------------
 
 do
-    -- Drop near x=570 — nearest 64-slot is 576 (9 * 64)
+    -- Position piece at (555, 200) — nearest slot is x=576 (9*64), y=192 (3*64)
     local p = JigsawPiece.new(0, {1, 0, 0, 1})
     p:pick_up()
-    p:drop(555)
+    p.sprite.x = 555
+    p.sprite.y = 200
+    p:drop()
     assert(p.state    == "grounded", "state should be grounded after drop()")
     assert(p.sprite.x == 576,        "x should snap to 576 (9*SLOT), got " .. tostring(p.sprite.x))
-    assert(p.sprite.y == 156,        "y should return to ground (156), got " .. tostring(p.sprite.y))
-    print("PASS: jigsaw_piece: drop() snaps x to nearest SLOT and returns to ground")
+    assert(p.sprite.y == 192,        "y should snap to 192 (3*SLOT), got " .. tostring(p.sprite.y))
+    print("PASS: jigsaw_piece: drop() snaps both x and y to nearest SLOT")
 end
 
 do
-    -- Drop at exact slot boundary
+    -- Drop at exact slot boundary on both axes
     local p = JigsawPiece.new(0, {1, 0, 0, 1})
     p:pick_up()
-    p:drop(384)  -- exactly 6 * 64
-    assert(p.sprite.x == 384, "drop at exact boundary should stay at 384, got " .. tostring(p.sprite.x))
+    p.sprite.x = 384  -- exactly 6 * 64
+    p.sprite.y = 128  -- exactly 2 * 64
+    p:drop()
+    assert(p.sprite.x == 384, "drop at exact x boundary should stay at 384, got " .. tostring(p.sprite.x))
+    assert(p.sprite.y == 128, "drop at exact y boundary should stay at 128, got " .. tostring(p.sprite.y))
     print("PASS: jigsaw_piece: drop() at exact slot boundary stays aligned")
 end
 

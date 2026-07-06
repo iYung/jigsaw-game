@@ -1,13 +1,25 @@
-# love-exemplar
+# Jigsaw Game
 
-A minimal Love2D project demonstrating clean architecture patterns. Intended as a reference, not a game.
+A 2D jigsaw puzzle game built with Love2D.
+
+## Gameplay
+
+- **WASD** — move the player
+- **E** — pick up / drop a jigsaw piece (walk within range of a piece on the ground)
+- **R** — rotate held piece 90°
+- **ESC** — quit
+
+The world is 2560px wide (2 screens). Walk right to find the other two pieces. Dropped pieces snap to the 64px (2U) world grid.
 
 ## Structure
 
 ```
-core/lua/       Engine classes — no game knowledge (Camera, Drawer, Input, Scene,
-                SceneManager, Sprite, SpriteSet, Timer, Fonts)
-game/           Game-specific code (Player, GameScene)
+game/           Game-specific code
+  constants.lua   U=32 base unit, SLOT=64 world grid size
+  jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap)
+  player.lua      Player movement and piece interaction
+  scenes/         GameScene
+lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite, etc.
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
 tests/          Test files — run with: love . --headless
 assets/         Images and other assets

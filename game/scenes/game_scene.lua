@@ -1,7 +1,8 @@
-local Scene  = require("lua/core/scene")
-local Sprite = require("lua/core/sprite")
-local Timer  = require("lua/core/timer")
-local Player = require("game/player")
+local Scene      = require("lua/core/scene")
+local Sprite     = require("lua/core/sprite")
+local Player     = require("game/player")
+local C          = require("game/constants")
+local JigsawPiece = require("game/jigsaw_piece")
 
 local GameScene = {}
 GameScene.__index = GameScene
@@ -13,39 +14,41 @@ function GameScene.new()
 end
 
 function GameScene:on_enter()
+    local WORLD_W = 40 * C.SLOT  -- 2560px
+
+    self.world_w = WORLD_W
+
     self.player = Player.new(-16, 170)
     self.drawer:add(self.player, 10)
 
-    self.ground = Sprite.new(-640, 220, 1600, 30)
+    self.ground = Sprite.new(0, 220, WORLD_W, 30)
     self.ground.color = { 0.25, 0.65, 0.25, 1 }
     self.drawer:add(self.ground, 1)
 
-    self.blink_timer = Timer.new(0.5)
-    self.coins = {}
-    for i = 1, 7 do
-        local coin = Sprite.new(i * 140 - 560, 193, 18, 18)
-        coin.color = { 1, 0.85, 0.1, 1 }
-        self.drawer:add(coin, 5)
-        table.insert(self.coins, coin)
+    self.pieces = {
+        JigsawPiece.new(384,  { 1,   0.3, 0.3, 1 }),
+        JigsawPiece.new(1280, { 0.3, 0.6, 1,   1 }),
+        JigsawPiece.new(2112, { 0.3, 1,   0.5, 1 }),
+    }
+
+    for _, piece in ipairs(self.pieces) do
+        self.drawer:add(piece, 5)
     end
 end
 
 function GameScene:update(dt)
-    self.player:update(dt)
-    self.camera:follow(self.player:centre(), 0.85)
+    self.player:update(dt, self.pieces)
 
-    if self.blink_timer:update(dt) then
-        for _, coin in ipairs(self.coins) do
-            coin.visible = not coin.visible
-        end
-    end
+    self.player.sprite.x = math.max(0, math.min(self.player.sprite.x, self.world_w - 32))
+
+    self.camera:follow(self.player:centre(), 0.85)
 end
 
 function GameScene:draw()
     Scene.draw(self)
 
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("WASD / Arrow keys to move   ESC to quit", 16, 16)
+    love.graphics.print("WASD: move   E: pick up / drop   R: rotate   ESC: quit", 16, 16)
     local c = self.player:centre()
     love.graphics.print(string.format("player (%.0f, %.0f)", c.x, c.y), 16, 36)
 end

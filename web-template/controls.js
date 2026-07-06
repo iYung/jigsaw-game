@@ -48,10 +48,19 @@
     '}',
     '#game-controls .cluster-right {',
     '  display: grid;',
-    '  grid-template-columns: 60px;',
+    '  grid-template-columns: repeat(2, 60px);',
     '  grid-template-rows: repeat(2, 60px);',
     '  gap: 6px;',
     '}',
+    '#game-controls button.btn-action {',
+    '  display: flex;',
+    '  flex-direction: column;',
+    '  align-items: center;',
+    '  justify-content: center;',
+    '  line-height: 1.1;',
+    '}',
+    '#game-controls button.btn-action .btn-key  { font-size: 16px; font-weight: bold; }',
+    '#game-controls button.btn-action .btn-label { font-size: 10px; opacity: 0.75; }',
     '#game-controls button {',
     '  min-width: 60px;',
     '  min-height: 60px;',
@@ -72,7 +81,9 @@
     '#game-controls .btn-left  { grid-column: 1; grid-row: 2; }',
     '#game-controls .btn-down  { grid-column: 2; grid-row: 2; }',
     '#game-controls .btn-right { grid-column: 3; grid-row: 2; }',
-    '#game-controls .btn-esc   { grid-column: 1; grid-row: 1; }'
+    '#game-controls .btn-pickup { grid-column: 1; grid-row: 1; }',
+    '#game-controls .btn-rotate { grid-column: 2; grid-row: 1; }',
+    '#game-controls .btn-esc    { grid-column: 1 / span 2; grid-row: 2; }'
   ].join('\n');
   document.head.appendChild(style);
 
@@ -80,7 +91,7 @@
   // determine which key was pressed. Synthetic events default to keyCode=0
   // which SDL maps to nothing, so all button presses are silently ignored.
   var KEY_CODES = {
-    'w': 87, 'a': 65, 's': 83, 'd': 68, 'Escape': 27
+    'w': 87, 'a': 65, 's': 83, 'd': 68, 'Escape': 27, 'e': 69, 'r': 82
   };
 
   document.addEventListener('DOMContentLoaded', function () {
@@ -123,11 +134,24 @@
     leftCluster.appendChild(btnDown);
     leftCluster.appendChild(btnRight);
 
-    // Right cluster: Esc
+    // Right cluster: Pick up (E), Rotate (R), Esc
     var rightCluster = document.createElement('div');
     rightCluster.className = 'cluster-right';
 
-    var btnEsc = document.createElement('button'); btnEsc.className = 'btn-esc'; btnEsc.textContent = 'Esc'; attachButton(btnEsc, 'Escape', 'Escape');
+    function makeActionButton(cls, key, code, label) {
+      var btn = document.createElement('button');
+      btn.className = 'btn-action ' + cls;
+      btn.innerHTML = '<span class="btn-key">' + key.toUpperCase() + '</span><span class="btn-label">' + label + '</span>';
+      attachButton(btn, key, code);
+      return btn;
+    }
+
+    var btnPickup = makeActionButton('btn-pickup', 'e', 'KeyE', 'Pick');
+    var btnRotate = makeActionButton('btn-rotate', 'r', 'KeyR', 'Rot');
+    var btnEsc    = document.createElement('button'); btnEsc.className = 'btn-esc'; btnEsc.textContent = 'Esc'; attachButton(btnEsc, 'Escape', 'Escape');
+
+    rightCluster.appendChild(btnPickup);
+    rightCluster.appendChild(btnRotate);
     rightCluster.appendChild(btnEsc);
 
     controls.appendChild(leftCluster);

@@ -92,9 +92,7 @@ function JigsawBox:centre()
 end
 
 function JigsawBox:draw()
-    if self.state ~= "done" then
-        self.sprite:draw()
-    end
+    self.sprite:draw()
 end
 
 return JigsawBox

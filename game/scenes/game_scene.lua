@@ -32,11 +32,10 @@ function GameScene:on_enter()
 
     self.box = JigsawBox.new(5 * C.SLOT, 3 * C.SLOT)
     self.drawer:add(self.box, 5)
-    self.box_removed = false
 end
 
 function GameScene:update(dt)
-    self.box:update(dt, self.pieces)
+    if self.box then self.box:update(dt, self.pieces) end
 
     for _, piece in ipairs(self.pieces) do
         if not self.pieces_in_drawer[piece] then
@@ -45,8 +44,9 @@ function GameScene:update(dt)
         end
     end
 
-    if self.box.state == "done" and not self.box_removed then
-        self.box_removed = true
+    if self.box and self.box.state == "done" then
+        self.box.sprite.visible = false
+        self.box = nil
     end
 
     self.player:update(dt, self.pieces, self.box)

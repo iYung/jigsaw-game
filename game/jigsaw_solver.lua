@@ -2,8 +2,8 @@ local C = require("game/constants")
 
 local M = {}
 
-function M.is_assembled(pieces)
-    if #pieces ~= C.PUZZLE_PIECE_COUNT then return false end
+function M.is_assembled(pieces, expected_count)
+    if #pieces ~= expected_count then return false end
 
     local ox, oy
     for i, piece in ipairs(pieces) do

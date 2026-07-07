@@ -18,16 +18,16 @@ A red **spawn button** sits at the top-centre of the (square, 2560×2560) world.
 ```
 game/           Game-specific code
   constants.lua   U=32 base unit, SLOT=64 world grid size
-  jigsaw_box.lua   JigsawBox entity (loads/slices the puzzle image into 9 quads, shuffles ejection order + initial rotation, timed piece ejection, Manhattan slot search)
+  jigsaw_box.lua   JigsawBox entity (infers grid size from the loaded image's pixel dimensions divided by C.SLOT — currently 3x3=9 for the existing 192x192 images, fails fast if a dimension isn't a whole multiple of C.SLOT — then slices into that many quads, shuffles ejection order + initial rotation, timed piece ejection, Manhattan slot search)
   jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap; optional image+quad visual; fade-out "vanishing" state on solve; draw_ghost() faint drop-location preview)
-  jigsaw_solver.lua Puzzle-completion check (is_assembled) — true when all 9 pieces are unrotated and in correct relative arrangement, regardless of absolute world position
+  jigsaw_solver.lua Puzzle-completion check (is_assembled(pieces, expected_count)) — true when exactly expected_count pieces are all unrotated and in correct relative arrangement, regardless of absolute world position; checked per-box (GameScene:active_puzzles) so differently-sized/simultaneous puzzles solve independently
   spawn_button.lua SpawnButton entity — grid-aligned world object; interact() fires an on_press callback (used by GameScene to spawn a new JigsawBox at a random grid position)
   player.lua      Player movement and piece interaction
   scenes/         GameScene
 lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite (optional quad sub-rectangle drawing), etc.
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
 tests/          Test files — run with: love . --headless
-assets/         Images and other assets (assets/puzzles/*.png — 3x3 puzzle source images, one picked at random per box; see scripts/generate_puzzle_images.py)
+assets/         Images and other assets (assets/puzzles/*.png — 192x192 (3x3) puzzle source images, one picked at random per box; grid size is inferred from each image's pixel size so any C.SLOT-multiple dimensions would work, but only 3x3 images exist today; see scripts/generate_puzzle_images.py)
 conf.lua        Window config; suppresses graphics/audio modules under --headless
 main.lua        Entry point — canvas rendering with letterboxing, pixel-art filter
 ```

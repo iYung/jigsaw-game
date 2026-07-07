@@ -33,10 +33,15 @@ function GameScene:on_enter()
 
     self.pieces = {}
     self.pieces_in_drawer = {}
-    self.puzzle_solved = false
+    self.active_puzzles = {}
 
     self.boxes = { JigsawBox.new(5 * C.SLOT, 3 * C.SLOT, self.world_w, self.world_h) }
     self.drawer:add(self.boxes[1], C.PRIORITY_PIECE)
+    self.active_puzzles[#self.active_puzzles + 1] = {
+        pieces = self.boxes[1].spawned,
+        piece_count = self.boxes[1].piece_count,
+        solved = false,
+    }
 
     self.spawn_button = SpawnButton.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
     self.drawer:add(self.spawn_button, C.PRIORITY_PIECE)
@@ -65,6 +70,11 @@ function GameScene:_spawn_box()
             local box = JigsawBox.new(cx, cy, self.world_w, self.world_h)
             self.boxes[#self.boxes + 1] = box
             self.drawer:add(box, C.PRIORITY_PIECE)
+            self.active_puzzles[#self.active_puzzles + 1] = {
+                pieces = box.spawned,
+                piece_count = box.piece_count,
+                solved = false,
+            }
             return
         end
     end
@@ -92,10 +102,12 @@ function GameScene:update(dt)
 
     self.player:update(dt, self.pieces, self.boxes, self.spawn_button, self.drawer)
 
-    if not self.puzzle_solved and JigsawSolver.is_assembled(self.pieces) then
-        self.puzzle_solved = true
-        for _, piece in ipairs(self.pieces) do
-            piece:start_vanish()
+    for _, entry in ipairs(self.active_puzzles) do
+        if not entry.solved and JigsawSolver.is_assembled(entry.pieces, entry.piece_count) then
+            entry.solved = true
+            for _, piece in ipairs(entry.pieces) do
+                piece:start_vanish()
+            end
         end
     end
 
@@ -107,6 +119,22 @@ function GameScene:update(dt)
                 table.remove(self.pieces, i)
                 self.drawer:remove(piece)
                 self.pieces_in_drawer[piece] = nil
+            end
+        end
+    end
+
+    for i = #self.active_puzzles, 1, -1 do
+        local entry = self.active_puzzles[i]
+        if entry.solved then
+            local all_faded = true
+            for _, piece in ipairs(entry.pieces) do
+                if piece.sprite.color[4] ~= 0 then
+                    all_faded = false
+                    break
+                end
+            end
+            if all_faded then
+                table.remove(self.active_puzzles, i)
             end
         end
     end

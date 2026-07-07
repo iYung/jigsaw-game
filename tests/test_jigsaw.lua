@@ -198,6 +198,90 @@ do
     print("PASS: overlap check (via real Player code path): occupied slot detected, drop blocked")
 end
 
+-- Player:drop_target() snap math -------------------------------------------
+
+do
+    -- Player position already grid-aligned: the raw target itself lands on a
+    -- SLOT multiple, so snap_x/snap_y should equal x/y exactly.
+    local Player = require("game/player")
+    local player = Player.new(144, 200)
+    local dt = player:drop_target()
+    assert(dt.x == 128, "drop_target().x should be 128, got " .. tostring(dt.x))
+    assert(dt.y == 192, "drop_target().y should be 192, got " .. tostring(dt.y))
+    assert(dt.snap_x == 128, "drop_target().snap_x should be 128 (already aligned), got " .. tostring(dt.snap_x))
+    assert(dt.snap_y == 192, "drop_target().snap_y should be 192 (already aligned), got " .. tostring(dt.snap_y))
+    print("PASS: player: drop_target() returns x/y == snap_x/snap_y when already grid-aligned")
+end
+
+do
+    -- Player position not grid-aligned: snap_x/snap_y should floor to the
+    -- nearest C.SLOT multiple, distinct from the raw target x/y.
+    local Player = require("game/player")
+    local player = Player.new(300, 170)
+    local dt = player:drop_target()
+    assert(dt.x == 284, "drop_target().x should be 284, got " .. tostring(dt.x))
+    assert(dt.y == 162, "drop_target().y should be 162, got " .. tostring(dt.y))
+    assert(dt.snap_x == 256, "drop_target().snap_x should snap to 256 (4*SLOT), got " .. tostring(dt.snap_x))
+    assert(dt.snap_y == 192, "drop_target().snap_y should snap to 192 (3*SLOT), got " .. tostring(dt.snap_y))
+    print("PASS: player: drop_target() floors an unaligned position to the nearest SLOT multiple")
+end
+
+-- interact-drop still lands the piece at Player:drop_target()'s snap values
+-- (regression check that Task A's extraction didn't change drop behavior) --
+
+do
+    local Player        = require("game/player")
+    local HeadlessInput = require("lua/headless/input")
+
+    local player = Player.new(300, 170)
+    player.input = HeadlessInput.new()
+
+    local p = JigsawPiece.new(0, {1, 0, 0, 1})
+    p:pick_up()
+    player.held_piece = p
+
+    local dt = player:drop_target()
+
+    player.input:press("interact")
+    player:update(1 / 60, {})
+
+    assert(p.state == "grounded", "piece should be grounded after drop")
+    assert(p.sprite.x == dt.snap_x,
+        "dropped piece x should match drop_target().snap_x (" .. dt.snap_x .. "), got " .. tostring(p.sprite.x))
+    assert(p.sprite.y == dt.snap_y,
+        "dropped piece y should match drop_target().snap_y (" .. dt.snap_y .. "), got " .. tostring(p.sprite.y))
+    print("PASS: player: interact-drop lands the piece at exactly Player:drop_target()'s snap_x/snap_y")
+end
+
+-- occupied-slot rejection is still keyed off Player:drop_target()'s values -
+
+do
+    local Player        = require("game/player")
+    local HeadlessInput = require("lua/headless/input")
+
+    local player = Player.new(300, 170)
+    player.input = HeadlessInput.new()
+
+    local pieceB = JigsawPiece.new(0, {0, 0, 1, 1})
+    pieceB:pick_up()
+    player.held_piece = pieceB
+
+    local dt = player:drop_target()
+    -- pieceA occupies exactly the slot drop_target() would land pieceB on.
+    local pieceA = JigsawPiece.new(dt.snap_x, {1, 0, 0, 1})
+    pieceA.sprite.y = dt.snap_y
+
+    local pieces = { pieceA, pieceB }
+    player.input:press("interact")
+    player:update(1 / 60, pieces)
+
+    assert(pieceB.state == "held", "pieceB should still be held when its drop_target() slot is occupied")
+    assert(player.held_piece == pieceB, "player.held_piece should remain pieceB when drop is blocked")
+    assert(pieceA.sprite.x == dt.snap_x and pieceA.sprite.y == dt.snap_y,
+        "pieceA's slot should be undisturbed")
+    print("PASS: player: occupied-slot rejection is still keyed off Player:drop_target()'s snap values")
+end
+
 -- JigsawBox ---------------------------------------------------------------
 local JigsawBox = require("game/jigsaw_box")
 
@@ -588,13 +672,15 @@ do
     player.sprite.draw = orig_player_draw
     piece.sprite.draw  = orig_piece_draw
 
-    assert(#call_order == 2,
-        "both player and held piece sprites should draw, got " .. #call_order .. " calls")
+    assert(#call_order == 3,
+        "player sprite, ghost preview, and held piece sprite should all draw, got " .. #call_order .. " calls")
     assert(call_order[1] == "player",
         "player's own sprite should draw first, got " .. tostring(call_order[1]))
     assert(call_order[2] == "piece",
-        "held piece's sprite should draw second, got " .. tostring(call_order[2]))
-    print("PASS: player: draw() draws the held piece's sprite after the player's own sprite")
+        "ghost preview (piece sprite) should draw second, got " .. tostring(call_order[2]))
+    assert(call_order[3] == "piece",
+        "held piece's sprite should draw third, got " .. tostring(call_order[3]))
+    print("PASS: player: draw() draws the ghost preview then the held piece's sprite after the player's own sprite")
 end
 
 do
@@ -619,6 +705,62 @@ do
         "only the player's own sprite should draw when no piece is held, got " .. #call_order)
     assert(call_order[1] == "player", "the single draw call should be the player's sprite")
     print("PASS: player: draw() with no held piece only draws the player's own sprite, without error")
+end
+
+-- draw_ghost() draws at the given position/alpha then restores real state --
+
+do
+    local p = JigsawPiece.new(384, {1, 0, 0, 1})
+    p:pick_up()
+    p:rotate()  -- rotation_step = 1, to prove ghost draw doesn't disturb rotation state either
+
+    local before_x     = p.sprite.x
+    local before_y      = p.sprite.y
+    local before_alpha  = p.sprite.color[4]
+    local before_state  = p.state
+    local before_rot    = p.rotation_step
+
+    local captured = nil
+    local orig_draw = p.sprite.draw
+    p.sprite.draw = function(self)
+        captured = { x = self.x, y = self.y, alpha = self.color[4] }
+        return orig_draw(self)
+    end
+
+    p:draw_ghost(500, 700, 0.2)
+
+    p.sprite.draw = orig_draw
+
+    assert(captured ~= nil, "draw_ghost() should draw the sprite")
+    assert(captured.x == 500, "ghost draw should use given x, got " .. tostring(captured.x))
+    assert(captured.y == 700, "ghost draw should use given y, got " .. tostring(captured.y))
+    assert(captured.alpha == 0.2, "ghost draw should use given alpha, got " .. tostring(captured.alpha))
+
+    assert(p.sprite.x == before_x, "sprite.x should be restored after draw_ghost()")
+    assert(p.sprite.y == before_y, "sprite.y should be restored after draw_ghost()")
+    assert(p.sprite.color[4] == before_alpha, "sprite.color[4] should be restored after draw_ghost()")
+    assert(p.state == before_state, "state should be unchanged by draw_ghost()")
+    assert(p.rotation_step == before_rot, "rotation_step should be unchanged by draw_ghost()")
+    print("PASS: jigsaw_piece: draw_ghost() draws at given position/alpha then restores real state")
+end
+
+-- draw_ghost() defaults alpha to 0.35 when omitted -------------------------
+
+do
+    local p = JigsawPiece.new(0, {1, 0, 0, 1})
+    local captured_alpha = nil
+    local orig_draw = p.sprite.draw
+    p.sprite.draw = function(self)
+        captured_alpha = self.color[4]
+        return orig_draw(self)
+    end
+
+    p:draw_ghost(100, 100)
+
+    p.sprite.draw = orig_draw
+
+    assert(captured_alpha == 0.35, "draw_ghost() with no alpha arg should default to 0.35, got " .. tostring(captured_alpha))
+    print("PASS: jigsaw_piece: draw_ghost() defaults alpha to 0.35 when omitted")
 end
 
 -- pieces_to_spawn row/col fields match each quad's actual source cell -----

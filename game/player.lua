@@ -33,23 +33,19 @@ function Player:update(dt, pieces, box, drawer)
 
     if self.input:pressed("interact") then
         if self.held_piece ~= nil then
-            local centre = self:centre()
-            local target_x = centre.x - C.U
-            local target_y = centre.y - C.U
-            local snap_x = math.floor(target_x / C.SLOT + 0.5) * C.SLOT
-            local snap_y = math.floor(target_y / C.SLOT + 0.5) * C.SLOT
+            local drop_target = self:drop_target()
             local occupied = false
             if pieces then
                 for _, p in ipairs(pieces) do
                     if p ~= self.held_piece and p.state == "grounded"
-                       and p.sprite.x == snap_x and p.sprite.y == snap_y then
+                       and p.sprite.x == drop_target.snap_x and p.sprite.y == drop_target.snap_y then
                         occupied = true
                         break
                     end
                 end
             end
             if not occupied then
-                self.held_piece:drop(target_x, target_y)
+                self.held_piece:drop(drop_target.x, drop_target.y)
                 pieces[#pieces + 1] = self.held_piece
                 if drawer then
                     drawer:add(self.held_piece, C.PRIORITY_PIECE)
@@ -113,9 +109,21 @@ function Player:centre()
     return { x = self.sprite.x + 16, y = self.sprite.y + 24 }
 end
 
+-- Where a held piece would land (grid-snapped) if dropped right now
+function Player:drop_target()
+    local centre = self:centre()
+    local target_x = centre.x - C.U
+    local target_y = centre.y - C.U
+    local snap_x = math.floor(target_x / C.SLOT + 0.5) * C.SLOT
+    local snap_y = math.floor(target_y / C.SLOT + 0.5) * C.SLOT
+    return { x = target_x, y = target_y, snap_x = snap_x, snap_y = snap_y }
+end
+
 function Player:draw()
     self.sprite:draw()
     if self.held_piece ~= nil then
+        local drop_target = self:drop_target()
+        self.held_piece:draw_ghost(drop_target.snap_x, drop_target.snap_y)
         self.held_piece:draw()
     end
 end

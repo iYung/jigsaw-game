@@ -307,7 +307,7 @@ end
 -- update() ejects one piece per call -------------------------------------
 
 do
-    local box = JigsawBox.new(128, 128)
+    local box = JigsawBox.new(128, 128, 2000, 2000)
     local pieces = {}
     box:interact()
     box:update(1.0, pieces)
@@ -319,7 +319,7 @@ end
 -- update() x9 ejects all pieces, state becomes done ----------------------
 
 do
-    local box = JigsawBox.new(128, 128)
+    local box = JigsawBox.new(128, 128, 2000, 2000)
     local pieces = {}
     box:interact()
     for i = 1, 8 do
@@ -336,7 +336,7 @@ end
 -- slot search skips occupied slots ----------------------------------------
 
 do
-    local box = JigsawBox.new(128, 192)
+    local box = JigsawBox.new(128, 192, 2000, 2000)
     local bx = box.sprite.x  -- 128
     local by = box.sprite.y  -- 192
     -- The first d=1 candidate (sorted by dx then dy) is {-1,0} -> (bx-SLOT, by).
@@ -353,6 +353,53 @@ do
     assert(not (new_piece.sprite.x == blocked_x and new_piece.sprite.y == blocked_y),
         "ejected piece must not land on the occupied slot")
     print("PASS: jigsaw_box: slot search skips grounded-piece-occupied slots")
+end
+
+-- interact() hides the box sprite immediately ------------------------------
+
+do
+    local box = JigsawBox.new(128, 128, 2000, 2000)
+    assert(box.sprite.visible == true, "box sprite should be visible before interact()")
+    box:interact()
+    assert(box.sprite.visible == false, "box sprite should be hidden immediately after interact()")
+    assert(box.state == "ejecting", "state should be 'ejecting' (not 'done') right after interact()")
+    print("PASS: jigsaw_box: interact() hides the box sprite immediately, before ejection finishes")
+end
+
+-- background ejection is unaffected by the box's early disappearance ------
+
+do
+    local box = JigsawBox.new(128, 128, 2000, 2000)
+    local pieces = {}
+    box:interact()
+    for i = 1, 9 do
+        box:update(1.0, pieces)
+        assert(box.sprite.visible == false,
+            "box sprite should stay hidden through update " .. i .. " of 9")
+    end
+    assert(#pieces == 9,        "nine pieces should be ejected after nine updates")
+    assert(box.state == "done", "state should be 'done' only once all 9 pieces are ejected")
+    print("PASS: jigsaw_box: box stays hidden while background ejection proceeds exactly as before")
+end
+
+-- _eject_next respects world bounds near an edge ---------------------------
+
+do
+    local world_w, world_h = 4 * C.SLOT, 4 * C.SLOT
+    local box = JigsawBox.new(0, 0, world_w, world_h)
+    local pieces = {}
+    box:interact()
+    for i = 1, 9 do
+        box:update(1.0, pieces)
+    end
+    assert(box.state == "done", "state should be 'done' after nine updates even near a world edge")
+    for i, p in ipairs(pieces) do
+        assert(p.sprite.x >= 0 and p.sprite.x < world_w,
+            "piece " .. i .. " sprite.x=" .. tostring(p.sprite.x) .. " should be within [0, world_w)")
+        assert(p.sprite.y >= 0 and p.sprite.y < world_h,
+            "piece " .. i .. " sprite.y=" .. tostring(p.sprite.y) .. " should be within [0, world_h)")
+    end
+    print("PASS: jigsaw_box: _eject_next keeps ejected pieces within world bounds near an edge")
 end
 
 -- pieces_to_spawn slices the image into 9 distinct cells (shuffle) --------
@@ -442,7 +489,7 @@ end
 do
     local rotation_steps = {}
     for trial = 1, 12 do
-        local box = JigsawBox.new(128, 128)
+        local box = JigsawBox.new(128, 128, 2000, 2000)
         box:interact()
         local pieces = {}
         box:update(1.0, pieces)
@@ -466,7 +513,7 @@ end
 -- ejected piece carries non-nil image + quad (visual wiring) --------------
 
 do
-    local box = JigsawBox.new(128, 128)
+    local box = JigsawBox.new(128, 128, 2000, 2000)
     box:interact()
     local pieces = {}
     box:update(1.0, pieces)

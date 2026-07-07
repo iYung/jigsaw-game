@@ -33,8 +33,11 @@ function Player:update(dt, pieces, box)
 
     if self.input:pressed("interact") then
         if self.held_piece ~= nil then
-            local snap_x = math.floor(self.held_piece.sprite.x / C.SLOT + 0.5) * C.SLOT
-            local snap_y = math.floor(self.held_piece.sprite.y / C.SLOT + 0.5) * C.SLOT
+            local centre = self:centre()
+            local target_x = centre.x - C.U
+            local target_y = centre.y - C.U
+            local snap_x = math.floor(target_x / C.SLOT + 0.5) * C.SLOT
+            local snap_y = math.floor(target_y / C.SLOT + 0.5) * C.SLOT
             local occupied = false
             if pieces then
                 for _, p in ipairs(pieces) do
@@ -46,7 +49,7 @@ function Player:update(dt, pieces, box)
                 end
             end
             if not occupied then
-                self.held_piece:drop()
+                self.held_piece:drop(target_x, target_y)
                 self.held_piece = nil
             end
         else

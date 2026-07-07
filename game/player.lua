@@ -120,10 +120,12 @@ function Player:drop_target()
 end
 
 function Player:draw()
-    self.sprite:draw()
     if self.held_piece ~= nil then
         local drop_target = self:drop_target()
         self.held_piece:draw_ghost(drop_target.snap_x, drop_target.snap_y)
+    end
+    self.sprite:draw()
+    if self.held_piece ~= nil then
         self.held_piece:draw()
     end
 end

@@ -645,7 +645,7 @@ do
     print("PASS: player: drop re-inserts piece into pieces and re-adds it to the Drawer at C.PRIORITY_PIECE")
 end
 
--- Player:draw() draws the held piece after the player's own sprite --------
+-- Player:draw() draws the ghost preview behind the player, held piece on top --
 
 do
     local Player = require("game/player")
@@ -673,14 +673,14 @@ do
     piece.sprite.draw  = orig_piece_draw
 
     assert(#call_order == 3,
-        "player sprite, ghost preview, and held piece sprite should all draw, got " .. #call_order .. " calls")
-    assert(call_order[1] == "player",
-        "player's own sprite should draw first, got " .. tostring(call_order[1]))
-    assert(call_order[2] == "piece",
-        "ghost preview (piece sprite) should draw second, got " .. tostring(call_order[2]))
+        "ghost preview, player sprite, and held piece sprite should all draw, got " .. #call_order .. " calls")
+    assert(call_order[1] == "piece",
+        "ghost preview (piece sprite) should draw first, behind the player, got " .. tostring(call_order[1]))
+    assert(call_order[2] == "player",
+        "player's own sprite should draw second, on top of the ghost, got " .. tostring(call_order[2]))
     assert(call_order[3] == "piece",
-        "held piece's sprite should draw third, got " .. tostring(call_order[3]))
-    print("PASS: player: draw() draws the ghost preview then the held piece's sprite after the player's own sprite")
+        "held piece's sprite should draw third, on top of the player, got " .. tostring(call_order[3]))
+    print("PASS: player: draw() draws the ghost preview behind the player, then the held piece's sprite on top")
 end
 
 do

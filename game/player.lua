@@ -23,7 +23,7 @@ function Player.new(x, y)
     return self
 end
 
-function Player:update(dt, pieces, box, drawer)
+function Player:update(dt, pieces, boxes, button, drawer)
     self.input:update()
     local s = self.sprite
     if self.input:is_down("left")  then s.x = s.x - SPEED * dt end
@@ -82,12 +82,34 @@ function Player:update(dt, pieces, box, drawer)
                 end
                 self.held_piece = nearest
             end
-            if self.held_piece == nil and box ~= nil and box.state == "waiting" then
-                local bc = box:centre()
+            local box_interacted = false
+            if self.held_piece == nil then
+                local nearest_box, nearest_box_dist = nil, math.huge
+                if boxes then
+                    for _, b in ipairs(boxes) do
+                        if b.state == "waiting" then
+                            local bc = b:centre()
+                            local dx = bc.x - centre.x
+                            local dy = bc.y - centre.y
+                            local dist = math.sqrt(dx * dx + dy * dy)
+                            if dist < nearest_box_dist then
+                                nearest_box_dist = dist
+                                nearest_box = b
+                            end
+                        end
+                    end
+                end
+                if nearest_box and nearest_box_dist <= 1.5 * C.U then
+                    nearest_box:interact()
+                    box_interacted = true
+                end
+            end
+            if self.held_piece == nil and not box_interacted and button ~= nil then
+                local bc = button:centre()
                 local dx = bc.x - centre.x
                 local dy = bc.y - centre.y
                 if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
-                    box:interact()
+                    button:interact()
                 end
             end
         end

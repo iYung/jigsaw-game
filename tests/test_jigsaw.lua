@@ -291,6 +291,9 @@ do
     local box = JigsawBox.new(128, 128)
     assert(box.state == "waiting",       "new box should be in state 'waiting'")
     assert(#box.pieces_to_spawn == 9,    "new box should have 9 items in pieces_to_spawn (3x3 grid)")
+    assert(box.rows == 3,         "box.rows should be inferred as 3 for a 192px-tall image, got " .. tostring(box.rows))
+    assert(box.cols == 3,         "box.cols should be inferred as 3 for a 192px-wide image, got " .. tostring(box.cols))
+    assert(box.piece_count == 9,  "box.piece_count should be rows*cols == 9, got " .. tostring(box.piece_count))
     print("PASS: jigsaw_box: new() creates box in state 'waiting' with 9 pieces queued")
 end
 
@@ -922,15 +925,15 @@ end
 do
     local pieces = build_assembled_pieces(0, 0)
     table.remove(pieces)  -- drop to 8 well-formed pieces
-    assert(JigsawSolver.is_assembled(pieces) == false,
-        "is_assembled should be false for fewer than C.PUZZLE_PIECE_COUNT pieces")
+    assert(JigsawSolver.is_assembled(pieces, 9) == false,
+        "is_assembled should be false for fewer than the expected piece count")
     print("PASS: jigsaw_solver: is_assembled() is false with fewer than 9 pieces")
 end
 
 do
     local pieces = build_assembled_pieces(0, 0)
     pieces[1].rotation_step = 1
-    assert(JigsawSolver.is_assembled(pieces) == false,
+    assert(JigsawSolver.is_assembled(pieces, 9) == false,
         "is_assembled should be false when any piece has a non-zero rotation_step")
     print("PASS: jigsaw_solver: is_assembled() is false when a piece is rotated")
 end
@@ -943,7 +946,7 @@ do
     local ax, ay = pieces[1].sprite.x, pieces[1].sprite.y
     pieces[1].sprite.x, pieces[1].sprite.y = pieces[2].sprite.x, pieces[2].sprite.y
     pieces[2].sprite.x, pieces[2].sprite.y = ax, ay
-    assert(JigsawSolver.is_assembled(pieces) == false,
+    assert(JigsawSolver.is_assembled(pieces, 9) == false,
         "is_assembled should be false when the relative arrangement is wrong")
     print("PASS: jigsaw_solver: is_assembled() is false when two pieces' positions are swapped")
 end
@@ -951,9 +954,9 @@ end
 do
     local pieces_origin  = build_assembled_pieces(0, 0)
     local pieces_shifted = build_assembled_pieces(3, 3)
-    assert(JigsawSolver.is_assembled(pieces_origin) == true,
+    assert(JigsawSolver.is_assembled(pieces_origin, 9) == true,
         "is_assembled should be true for a correctly arranged puzzle at the world origin")
-    assert(JigsawSolver.is_assembled(pieces_shifted) == true,
+    assert(JigsawSolver.is_assembled(pieces_shifted, 9) == true,
         "is_assembled should be true for a correctly arranged puzzle shifted by a constant offset")
     print("PASS: jigsaw_solver: is_assembled() is true regardless of the puzzle's absolute world position")
 end
@@ -968,10 +971,14 @@ do
     gs:on_enter()
 
     -- Replace whatever the box set up in on_enter() with 9 correctly
-    -- arranged, unrotated pieces so JigsawSolver.is_assembled(gs.pieces) is
-    -- true as soon as gs:update()'s solved-check runs.
+    -- arranged, unrotated pieces so JigsawSolver.is_assembled(entry.pieces,
+    -- entry.piece_count) is true as soon as gs:update()'s solved-check runs.
+    -- Since this bypasses a real JigsawBox/_spawn_box, also seed a matching
+    -- active_puzzles entry so the per-entry loop in GameScene:update has
+    -- something to evaluate.
     gs.pieces = {}
     gs.pieces_in_drawer = {}
+    gs.active_puzzles = {}
     local spawned = {}
     for row = 0, 2 do
         for col = 0, 2 do
@@ -984,19 +991,27 @@ do
             gs.pieces_in_drawer[p] = true
         end
     end
-    assert(#gs.pieces == C.PUZZLE_PIECE_COUNT, "test setup should have 9 pieces before update()")
+    assert(#gs.pieces == 9, "test setup should have 9 pieces before update()")
+
+    local entry = { pieces = spawned, piece_count = 9, solved = false }
+    gs.active_puzzles[#gs.active_puzzles + 1] = entry
 
     -- First update(): the one-shot solved check fires (assembled == true),
     -- start_vanish() runs on every piece, and the same call already drives
     -- one small update_fade() tick on each piece since it's now "vanishing".
     gs:update(1 / 60)
 
-    assert(gs.puzzle_solved == true, "puzzle_solved should be set true once the arrangement is detected")
+    assert(entry.solved == true, "active_puzzles entry.solved should be set true once the arrangement is detected")
     for _, p in ipairs(spawned) do
         assert(p.state == "vanishing", "every piece should be in the 'vanishing' state after the solved check fires")
     end
-    assert(#gs.pieces == C.PUZZLE_PIECE_COUNT,
+    assert(#gs.pieces == 9,
         "pieces should not be removed yet after only one small fade tick")
+    local found_entry = false
+    for _, e in ipairs(gs.active_puzzles) do
+        if e == entry then found_entry = true end
+    end
+    assert(found_entry, "active_puzzles entry should not be pruned yet, before pieces finish fading")
 
     -- Drive enough more time for the fade to fully complete.
     gs:update(C.PIECE_FADE_DURATION)
@@ -1006,12 +1021,116 @@ do
     for _, p in ipairs(spawned) do
         assert(gs.pieces_in_drawer[p] == nil, "vanished piece should be cleared from pieces_in_drawer")
         local found_in_drawer = false
-        for _, entry in ipairs(gs.drawer.layers) do
-            if entry.sprite == p then found_in_drawer = true end
+        for _, entry2 in ipairs(gs.drawer.layers) do
+            if entry2.sprite == p then found_in_drawer = true end
         end
         assert(not found_in_drawer, "vanished piece should no longer appear in the Drawer's layers")
     end
-    print("PASS: game_scene: assembling the puzzle fades out and removes all pieces from gs.pieces and the Drawer")
+    local still_present = false
+    for _, e in ipairs(gs.active_puzzles) do
+        if e == entry then still_present = true end
+    end
+    assert(not still_present,
+        "active_puzzles entry should be pruned once solved and all its pieces have fully faded")
+    print("PASS: game_scene: assembling the puzzle fades out and removes all pieces from gs.pieces and the Drawer, and prunes the active_puzzles entry")
+end
+
+-- integration: two differently-sized puzzles solve/vanish independently ----
+-- via separate active_puzzles entries (the scenario per-box completion -----
+-- tracking exists for -- see docs/design/infer-puzzle-size.md) -------------
+
+do
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    gs.pieces = {}
+    gs.pieces_in_drawer = {}
+    gs.active_puzzles = {}
+
+    -- Puzzle A: a correctly-arranged 3x3 (9-piece) puzzle at the world origin.
+    local spawned_a = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local p = JigsawPiece.new(col * C.SLOT, {1, 1, 1, 1},
+                { image = {}, quad = {}, row = row, col = col })
+            p.sprite.y = row * C.SLOT
+            gs.pieces[#gs.pieces + 1] = p
+            spawned_a[#spawned_a + 1] = p
+            gs.drawer:add(p, C.PRIORITY_PIECE)
+            gs.pieces_in_drawer[p] = true
+        end
+    end
+    local entry_a = { pieces = spawned_a, piece_count = 9, solved = false }
+    gs.active_puzzles[#gs.active_puzzles + 1] = entry_a
+
+    -- Puzzle B: a 2x2 (4-piece) puzzle, offset well clear of puzzle A, but
+    -- deliberately NOT correctly arranged yet (one piece is rotated), so it
+    -- should stay unsolved while puzzle A completes.
+    local OX, OY = 10, 10  -- slot offset, clear of puzzle A's 0..2 range
+    local spawned_b = {}
+    for row = 0, 1 do
+        for col = 0, 1 do
+            local p = JigsawPiece.new((col + OX) * C.SLOT, {0, 1, 1, 1},
+                { image = {}, quad = {}, row = row, col = col })
+            p.sprite.y = (row + OY) * C.SLOT
+            gs.pieces[#gs.pieces + 1] = p
+            spawned_b[#spawned_b + 1] = p
+            gs.drawer:add(p, C.PRIORITY_PIECE)
+            gs.pieces_in_drawer[p] = true
+        end
+    end
+    spawned_b[4].rotation_step = 1  -- misarranged: not assembled yet
+    local entry_b = { pieces = spawned_b, piece_count = 4, solved = false }
+    gs.active_puzzles[#gs.active_puzzles + 1] = entry_b
+
+    -- First update(): puzzle A (correctly arranged, 9 pieces) should solve
+    -- and start vanishing even though puzzle B's 4 pieces are also on the
+    -- field (gs.pieces totals 13) -- neither a stale global count nor
+    -- puzzle B's presence should block puzzle A's own per-entry check.
+    gs:update(1 / 60)
+
+    assert(entry_a.solved == true, "puzzle A should solve independently of puzzle B's pieces being present")
+    assert(entry_b.solved == false, "puzzle B should remain unsolved since it isn't correctly arranged")
+    for _, p in ipairs(spawned_a) do
+        assert(p.state == "vanishing", "puzzle A's pieces should start vanishing once solved")
+    end
+    for _, p in ipairs(spawned_b) do
+        assert(p.state == "grounded", "puzzle B's pieces should be untouched while unsolved")
+    end
+
+    -- Drive time forward so puzzle A's pieces fully fade and its
+    -- active_puzzles entry gets pruned -- puzzle B must be unaffected.
+    gs:update(C.PIECE_FADE_DURATION)
+
+    local a_present = false
+    for _, e in ipairs(gs.active_puzzles) do
+        if e == entry_a then a_present = true end
+    end
+    assert(not a_present, "puzzle A's active_puzzles entry should be pruned once fully faded")
+
+    local b_present = false
+    for _, e in ipairs(gs.active_puzzles) do
+        if e == entry_b then b_present = true end
+    end
+    assert(b_present, "puzzle B's active_puzzles entry should still be present and untouched")
+    assert(entry_b.solved == false, "puzzle B should still be unsolved after puzzle A's cleanup")
+
+    -- Now fix puzzle B's arrangement (undo the rotation) and confirm it
+    -- registers as solved on its own, on a later frame, with puzzle A's
+    -- pieces already gone from the field -- proves puzzle A's absence
+    -- doesn't block puzzle B either.
+    spawned_b[4].rotation_step = 0
+
+    gs:update(1 / 60)
+
+    assert(entry_b.solved == true,
+        "puzzle B should solve independently once correctly arranged, after puzzle A already vanished")
+    for _, p in ipairs(spawned_b) do
+        assert(p.state == "vanishing", "puzzle B's pieces should start vanishing once solved")
+    end
+    print("PASS: game_scene: two differently-sized puzzles solve and vanish independently via active_puzzles")
 end
 
 -- SpawnButton ---------------------------------------------------------------

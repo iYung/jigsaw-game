@@ -23,13 +23,20 @@ function JigsawBox.new(x, y, world_w, world_h)
     local puzzle_entry = PUZZLE_IMAGES[math.random(#PUZZLE_IMAGES)]
     local puzzle_image = love.graphics.newImage(puzzle_entry.path)
     local imgW, imgH = puzzle_image:getDimensions()
-    local cellW = imgW / 3
-    local cellH = imgH / 3
+    local cols = imgW / C.SLOT
+    local rows = imgH / C.SLOT
+    assert(cols == math.floor(cols) and cols > 0,
+        "puzzle image width must be a positive multiple of C.SLOT, got " .. tostring(imgW))
+    assert(rows == math.floor(rows) and rows > 0,
+        "puzzle image height must be a positive multiple of C.SLOT, got " .. tostring(imgH))
+    self.rows = rows
+    self.cols = cols
+    self.piece_count = rows * cols
 
     self.pieces_to_spawn = {}
-    for row = 0, 2 do
-        for col = 0, 2 do
-            local quad = love.graphics.newQuad(col * cellW, row * cellH, cellW, cellH, imgW, imgH)
+    for row = 0, rows - 1 do
+        for col = 0, cols - 1 do
+            local quad = love.graphics.newQuad(col * C.SLOT, row * C.SLOT, C.SLOT, C.SLOT, imgW, imgH)
             self.pieces_to_spawn[#self.pieces_to_spawn + 1] = { image = puzzle_image, quad = quad, row = row, col = col }
         end
     end

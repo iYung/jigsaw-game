@@ -4,12 +4,16 @@
 
 local noop = function() end
 
--- Stub image returned by any love.graphics.new*() call.
+-- Stub image returned by any love.graphics.new*() call. Dimensions match the
+-- real puzzle assets (assets/puzzles/*.png, 192x192 = 3*C.SLOT per side) so
+-- that JigsawBox.new's fixed-cell-size grid inference (game/jigsaw_box.lua)
+-- sees whole-number rows/cols under headless tests just like it does with
+-- the real images.
 local function make_stub_image()
   return {
-    getWidth      = function() return 120 end,
-    getHeight     = function() return 120 end,
-    getDimensions = function() return 120, 120 end,
+    getWidth      = function() return 192 end,
+    getHeight     = function() return 192 end,
+    getDimensions = function() return 192, 192 end,
     setFilter     = noop,
   }
 end

@@ -592,7 +592,7 @@ do
     player.input = HeadlessInput.new()
 
     player.input:press("interact")
-    player:update(1 / 60, pieces, nil, drawer)
+    player:update(1 / 60, pieces, nil, nil, drawer)
 
     assert(#pieces == 0, "pieces array should be empty after pick-up, got " .. #pieces)
     local found_in_drawer = false
@@ -622,7 +622,7 @@ do
     local drawer = Drawer.new()
 
     player.input:press("interact")
-    player:update(1 / 60, pieces, nil, drawer)
+    player:update(1 / 60, pieces, nil, nil, drawer)
 
     local found_in_pieces = false
     for _, p in ipairs(pieces) do
@@ -965,6 +965,150 @@ do
         assert(not found_in_drawer, "vanished piece should no longer appear in the Drawer's layers")
     end
     print("PASS: game_scene: assembling the puzzle fades out and removes all pieces from gs.pieces and the Drawer")
+end
+
+-- SpawnButton ---------------------------------------------------------------
+local SpawnButton = require("game/spawn_button")
+
+-- interact() invokes on_press exactly once per call --------------------------
+
+do
+    local calls = 0
+    local button = SpawnButton.new(0, 0, function() calls = calls + 1 end)
+
+    button:interact()
+    assert(calls == 1, "on_press should be invoked once after first interact(), got " .. calls)
+
+    button:interact()
+    assert(calls == 2, "on_press should be invoked once more after second interact(), got " .. calls)
+    print("PASS: spawn_button: interact() invokes on_press exactly once per call")
+end
+
+-- centre() --------------------------------------------------------------------
+
+do
+    local button = SpawnButton.new(320, 640, function() end)
+    local c = button:centre()
+    assert(c.x == 320 + C.U, "centre.x should be x + U = " .. (320 + C.U) .. ", got " .. tostring(c.x))
+    assert(c.y == 640 + C.U, "centre.y should be y + U = " .. (640 + C.U) .. ", got " .. tostring(c.y))
+    print("PASS: spawn_button: centre() returns sprite center")
+end
+
+-- GameScene:_spawn_box() ------------------------------------------------------
+-- picks grid-aligned, in-bounds, non-colliding cells for new boxes -----------
+
+do
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    local boxes_before = #gs.boxes
+    for _ = 1, 20 do
+        gs:_spawn_box()
+    end
+    assert(#gs.boxes > boxes_before,
+        "expected at least one new box to be added across 20 spawn attempts in a mostly-empty world")
+
+    local seen = {}
+    for _, box in ipairs(gs.boxes) do
+        local bx, by = box.sprite.x, box.sprite.y
+
+        assert(bx >= 0 and bx <= gs.world_w - C.SLOT,
+            "box x should be within [0, world_w - SLOT], got " .. tostring(bx))
+        assert(by >= 0 and by <= gs.world_h - C.SLOT,
+            "box y should be within [0, world_h - SLOT], got " .. tostring(by))
+        assert(bx % C.SLOT == 0, "box x should be a multiple of C.SLOT, got " .. tostring(bx))
+        assert(by % C.SLOT == 0, "box y should be a multiple of C.SLOT, got " .. tostring(by))
+
+        local key = bx .. "," .. by
+        assert(seen[key] == nil, "two boxes should not share the same (x, y) position: " .. key)
+        seen[key] = true
+
+        assert(not (bx == gs.spawn_button.sprite.x and by == gs.spawn_button.sprite.y),
+            "box position should not collide with the spawn button's position")
+    end
+    print("PASS: game_scene: _spawn_box() places boxes on grid-aligned, in-bounds, non-colliding cells")
+end
+
+-- Player:update interacts with the nearest of several waiting boxes ---------
+
+do
+    local Player        = require("game/player")
+    local HeadlessInput = require("lua/headless/input")
+    local JigsawBoxMod  = require("game/jigsaw_box")
+
+    local player = Player.new(0, 0)
+    player.input = HeadlessInput.new()
+    -- player:centre() == (16, 24)
+
+    -- All three boxes' centres sit within 1.5*C.U (48px) of the player's
+    -- centre, with boxNear strictly the closest of the three.
+    local boxNear = JigsawBoxMod.new(0, 0)    -- centre (32, 32), dist ~17.9
+    local boxMid  = JigsawBoxMod.new(16, 16)  -- centre (48, 48), dist 40
+    local boxFar  = JigsawBoxMod.new(0, 32)   -- centre (32, 64), dist ~43.1
+
+    -- Deliberately not in nearest-first array order, to prove the scan
+    -- actually compares distances rather than just picking boxes[1].
+    local boxes = { boxFar, boxNear, boxMid }
+
+    player.input:press("interact")
+    player:update(1 / 60, {}, boxes, nil, nil)
+
+    assert(boxNear.state == "ejecting", "the nearest waiting box should have been interacted with")
+    assert(boxMid.state  == "waiting",  "a farther waiting box should be untouched")
+    assert(boxFar.state  == "waiting",  "the farthest waiting box should be untouched")
+    print("PASS: player: update() interacts with the nearest of several waiting boxes in range")
+end
+
+-- Player:update calls button:interact() when no piece/box is in range -------
+-- but the button is --------------------------------------------------------
+
+do
+    local Player         = require("game/player")
+    local HeadlessInput  = require("lua/headless/input")
+    local SpawnButtonMod = require("game/spawn_button")
+
+    local player = Player.new(0, 0)
+    player.input = HeadlessInput.new()
+    -- player:centre() == (16, 24)
+
+    local presses = 0
+    local button = SpawnButtonMod.new(0, 0, function() presses = presses + 1 end)
+    -- button:centre() == (32, 32), dist ~17.9, well within 1.5*C.U
+
+    player.input:press("interact")
+    player:update(1 / 60, {}, {}, button, nil)
+
+    assert(presses == 1,
+        "button:interact() should fire when no piece/box is in range but the button is, got " .. presses .. " presses")
+    print("PASS: player: update() calls button:interact() when no piece/box is in range but the button is")
+end
+
+-- ...and does NOT call button:interact() when a box interaction already ----
+-- happened on the same press (box takes priority over the button) ----------
+
+do
+    local Player         = require("game/player")
+    local HeadlessInput  = require("lua/headless/input")
+    local SpawnButtonMod = require("game/spawn_button")
+    local JigsawBoxMod   = require("game/jigsaw_box")
+
+    local player = Player.new(0, 0)
+    player.input = HeadlessInput.new()
+    -- player:centre() == (16, 24)
+
+    local presses = 0
+    local button = SpawnButtonMod.new(0, 0, function() presses = presses + 1 end)  -- centre (32, 32)
+    local box    = JigsawBoxMod.new(0, 0)                                          -- centre (32, 32)
+
+    player.input:press("interact")
+    player:update(1 / 60, {}, { box }, button, nil)
+
+    assert(box.state == "ejecting", "box should be interacted with when both box and button are in range")
+    assert(presses == 0,
+        "button:interact() should NOT fire when a box interaction already happened this press, got " .. presses .. " presses")
+    print("PASS: player: update() prioritizes box interaction over button interaction when both are in range")
 end
 
 print("ALL TESTS PASSED")

@@ -4,6 +4,7 @@ local Player     = require("game/player")
 local C          = require("game/constants")
 local JigsawBox  = require("game/jigsaw_box")
 local JigsawSolver = require("game/jigsaw_solver")
+local SpawnButton = require("game/spawn_button")
 
 local GameScene = {}
 GameScene.__index = GameScene
@@ -16,8 +17,10 @@ end
 
 function GameScene:on_enter()
     local WORLD_W = 40 * C.SLOT  -- 2560px
+    local WORLD_H = WORLD_W
 
     self.world_w = WORLD_W
+    self.world_h = WORLD_H
 
     local GROUND_Y = 4 * C.SLOT  -- 256, grid-aligned so pieces rest at 3*SLOT=192
 
@@ -32,12 +35,45 @@ function GameScene:on_enter()
     self.pieces_in_drawer = {}
     self.puzzle_solved = false
 
-    self.box = JigsawBox.new(5 * C.SLOT, 3 * C.SLOT)
-    self.drawer:add(self.box, C.PRIORITY_PIECE)
+    self.boxes = { JigsawBox.new(5 * C.SLOT, 3 * C.SLOT) }
+    self.drawer:add(self.boxes[1], C.PRIORITY_PIECE)
+
+    self.spawn_button = SpawnButton.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
+    self.drawer:add(self.spawn_button, C.PRIORITY_PIECE)
+end
+
+function GameScene:_spawn_box()
+    local cols = self.world_w / C.SLOT
+    local rows = self.world_h / C.SLOT
+
+    for _ = 1, 50 do
+        local cx = math.random(0, cols - 1) * C.SLOT
+        local cy = math.random(0, rows - 1) * C.SLOT
+
+        local occupied = false
+        for _, box in ipairs(self.boxes) do
+            if box.sprite.x == cx and box.sprite.y == cy then
+                occupied = true
+                break
+            end
+        end
+        if not occupied and self.spawn_button.sprite.x == cx and self.spawn_button.sprite.y == cy then
+            occupied = true
+        end
+
+        if not occupied then
+            local box = JigsawBox.new(cx, cy)
+            self.boxes[#self.boxes + 1] = box
+            self.drawer:add(box, C.PRIORITY_PIECE)
+            return
+        end
+    end
 end
 
 function GameScene:update(dt)
-    if self.box then self.box:update(dt, self.pieces) end
+    for _, box in ipairs(self.boxes) do
+        box:update(dt, self.pieces)
+    end
 
     for _, piece in ipairs(self.pieces) do
         if not self.pieces_in_drawer[piece] then
@@ -46,12 +82,15 @@ function GameScene:update(dt)
         end
     end
 
-    if self.box and self.box.state == "done" then
-        self.box.sprite.visible = false
-        self.box = nil
+    for i = #self.boxes, 1, -1 do
+        local box = self.boxes[i]
+        if box.state == "done" then
+            box.sprite.visible = false
+            table.remove(self.boxes, i)
+        end
     end
 
-    self.player:update(dt, self.pieces, self.box, self.drawer)
+    self.player:update(dt, self.pieces, self.boxes, self.spawn_button, self.drawer)
 
     if not self.puzzle_solved and JigsawSolver.is_assembled(self.pieces) then
         self.puzzle_solved = true
@@ -73,6 +112,7 @@ function GameScene:update(dt)
     end
 
     self.player.sprite.x = math.max(0, math.min(self.player.sprite.x, self.world_w - 32))
+    self.player.sprite.y = math.max(0, math.min(self.player.sprite.y, self.world_h - 48))
 
     self.camera:follow(self.player:centre(), 0.85)
 end

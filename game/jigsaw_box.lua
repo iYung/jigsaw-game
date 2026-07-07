@@ -21,7 +21,7 @@ function JigsawBox.new(x, y)
     for row = 0, 2 do
         for col = 0, 2 do
             local quad = love.graphics.newQuad(col * cellW, row * cellH, cellW, cellH, imgW, imgH)
-            self.pieces_to_spawn[#self.pieces_to_spawn + 1] = { image = puzzle_image, quad = quad }
+            self.pieces_to_spawn[#self.pieces_to_spawn + 1] = { image = puzzle_image, quad = quad, row = row, col = col }
         end
     end
 

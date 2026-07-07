@@ -2,7 +2,7 @@ local Scene      = require("lua/core/scene")
 local Sprite     = require("lua/core/sprite")
 local Player     = require("game/player")
 local C          = require("game/constants")
-local JigsawPiece = require("game/jigsaw_piece")
+local JigsawBox  = require("game/jigsaw_box")
 
 local GameScene = {}
 GameScene.__index = GameScene
@@ -27,19 +27,29 @@ function GameScene:on_enter()
     self.ground.color = { 0.25, 0.65, 0.25, 1 }
     self.drawer:add(self.ground, 1)
 
-    self.pieces = {
-        JigsawPiece.new(384,  { 1,   0.3, 0.3, 1 }),
-        JigsawPiece.new(1280, { 0.3, 0.6, 1,   1 }),
-        JigsawPiece.new(2112, { 0.3, 1,   0.5, 1 }),
-    }
+    self.pieces = {}
+    self.pieces_in_drawer = {}
 
-    for _, piece in ipairs(self.pieces) do
-        self.drawer:add(piece, 5)
-    end
+    self.box = JigsawBox.new(5 * C.SLOT, 3 * C.SLOT)
+    self.drawer:add(self.box, 5)
 end
 
 function GameScene:update(dt)
-    self.player:update(dt, self.pieces)
+    if self.box then self.box:update(dt, self.pieces) end
+
+    for _, piece in ipairs(self.pieces) do
+        if not self.pieces_in_drawer[piece] then
+            self.drawer:add(piece, 5)
+            self.pieces_in_drawer[piece] = true
+        end
+    end
+
+    if self.box and self.box.state == "done" then
+        self.box.sprite.visible = false
+        self.box = nil
+    end
+
+    self.player:update(dt, self.pieces, self.box)
 
     self.player.sprite.x = math.max(0, math.min(self.player.sprite.x, self.world_w - 32))
 

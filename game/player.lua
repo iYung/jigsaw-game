@@ -23,7 +23,7 @@ function Player.new(x, y)
     return self
 end
 
-function Player:update(dt, pieces)
+function Player:update(dt, pieces, box)
     self.input:update()
     local s = self.sprite
     if self.input:is_down("left")  then s.x = s.x - SPEED * dt end
@@ -69,6 +69,14 @@ function Player:update(dt, pieces)
             if nearest and nearest_dist <= 1.5 * C.U then
                 nearest:pick_up()
                 self.held_piece = nearest
+            end
+            if self.held_piece == nil and box ~= nil and box.state == "waiting" then
+                local bc = box:centre()
+                local dx = bc.x - centre.x
+                local dy = bc.y - centre.y
+                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
+                    box:interact()
+                end
             end
         end
     end

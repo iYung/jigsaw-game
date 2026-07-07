@@ -16,7 +16,7 @@ function GameScene.new()
 end
 
 function GameScene:on_enter()
-    local WORLD_W = 40 * C.SLOT  -- 2560px
+    local WORLD_W = 20 * C.SLOT  -- 1280px
     local WORLD_H = WORLD_W
 
     self.world_w = WORLD_W
@@ -27,9 +27,24 @@ function GameScene:on_enter()
     self.player = Player.new(0, GROUND_Y - 48)
     self.drawer:add(self.player, 10)
 
-    self.ground = Sprite.new(0, GROUND_Y, WORLD_W, 30)
-    self.ground.color = { 0.25, 0.65, 0.25, 1 }
-    self.drawer:add(self.ground, 1)
+    self.floor = {
+        draw = function()
+            local cols = WORLD_W / C.SLOT
+            local rows = WORLD_H / C.SLOT
+            for row = 0, rows - 1 do
+                for col = 0, cols - 1 do
+                    if (row + col) % 2 == 0 then
+                        love.graphics.setColor(0.55, 0.55, 0.55, 1)
+                    else
+                        love.graphics.setColor(0.45, 0.45, 0.45, 1)
+                    end
+                    love.graphics.rectangle("fill", col * C.SLOT, row * C.SLOT, C.SLOT, C.SLOT)
+                end
+            end
+            love.graphics.setColor(1, 1, 1, 1)
+        end,
+    }
+    self.drawer:add(self.floor, 0)
 
     self.pieces = {}
     self.pieces_in_drawer = {}

@@ -8,4 +8,6 @@ return {
     U = U,
     SLOT = SLOT,
     PRIORITY_PIECE = PRIORITY_PIECE,
+    PIECE_FADE_DURATION = 0.5,
+    PUZZLE_PIECE_COUNT = 9,
 }

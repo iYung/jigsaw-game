@@ -571,4 +571,208 @@ do
     print("PASS: player: draw() with no held piece only draws the player's own sprite, without error")
 end
 
+-- pieces_to_spawn row/col fields match each quad's actual source cell -----
+
+do
+    -- Same love.graphics.newQuad spy technique as the "pieces_to_spawn
+    -- slices the image into 9 distinct cells" block above, but this time
+    -- checking that spec.row/spec.col (which JigsawPiece/JigsawSolver rely
+    -- on) actually agree with the quad's real (col, row) source cell rather
+    -- than just checking the cells are distinct.
+    local real_newQuad = love.graphics.newQuad
+    local cell_of = {}  -- quad (table identity) -> {col=, row=}
+    love.graphics.newQuad = function(qx, qy, qw, qh, imgW, imgH)
+        local quad = real_newQuad(qx, qy, qw, qh, imgW, imgH)
+        local col = math.floor(qx / qw + 0.5)
+        local row = math.floor(qy / qh + 0.5)
+        cell_of[quad] = { col = col, row = row }
+        return quad
+    end
+
+    local box = JigsawBox.new(0, 0)
+    love.graphics.newQuad = real_newQuad
+
+    local seen = {}
+    for _, spec in ipairs(box.pieces_to_spawn) do
+        local actual = cell_of[spec.quad]
+        assert(actual ~= nil, "spec.quad should be one of the quads created by JigsawBox.new")
+        assert(spec.row == actual.row,
+            "spec.row (" .. tostring(spec.row) .. ") should match quad's actual row (" .. actual.row .. ")")
+        assert(spec.col == actual.col,
+            "spec.col (" .. tostring(spec.col) .. ") should match quad's actual col (" .. actual.col .. ")")
+        local cell = spec.col .. "," .. spec.row
+        assert(not seen[cell], "(row,col) combination " .. cell .. " appears more than once in pieces_to_spawn")
+        seen[cell] = true
+    end
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local cell = col .. "," .. row
+            assert(seen[cell], "pieces_to_spawn is missing expected (col,row) combination " .. cell)
+        end
+    end
+    print("PASS: jigsaw_box: pieces_to_spawn entries' row/col fields match their quad's actual source cell (all 9 combinations)")
+end
+
+-- JigsawPiece.new copies visual.row/visual.col onto the piece -------------
+
+do
+    local visual = { image = {}, quad = {}, row = 1, col = 2 }
+    local p = JigsawPiece.new(0, {1, 1, 1, 1}, visual)
+    assert(p.row == 1, "piece.row should be copied from visual.row, got " .. tostring(p.row))
+    assert(p.col == 2, "piece.col should be copied from visual.col, got " .. tostring(p.col))
+    print("PASS: jigsaw_piece: new() copies visual.row/visual.col onto the piece")
+end
+
+-- start_vanish() ------------------------------------------------------------
+
+do
+    local p = JigsawPiece.new(0, {1, 0, 0, 1})
+    p:start_vanish()
+    assert(p.state == "vanishing", "state should be 'vanishing' after start_vanish()")
+    assert(p.fade_timer == C.PIECE_FADE_DURATION,
+        "fade_timer should be C.PIECE_FADE_DURATION (" .. C.PIECE_FADE_DURATION .. "), got " .. tostring(p.fade_timer))
+    assert(p.fade_timer > 0, "fade_timer should be a positive number")
+    print("PASS: jigsaw_piece: start_vanish() sets state to 'vanishing' with a full fade_timer")
+end
+
+-- update_fade() -------------------------------------------------------------
+
+do
+    local p = JigsawPiece.new(0, {1, 1, 1, 1})
+    p:start_vanish()
+    local step = C.PIECE_FADE_DURATION / 4
+
+    local prev_alpha = p.sprite.color[4]
+    local finished
+    for i = 1, 3 do
+        finished = p:update_fade(step)
+        assert(not finished, "update_fade() should not report finished while time remains (step " .. i .. ")")
+        assert(p.sprite.color[4] < prev_alpha,
+            "sprite.color[4] should decrease each update_fade() call, step " .. i)
+        prev_alpha = p.sprite.color[4]
+    end
+
+    finished = p:update_fade(C.PIECE_FADE_DURATION)
+    assert(finished, "update_fade() should return true once fade_timer is exhausted")
+    assert(p.sprite.color[4] == 0,
+        "sprite.color[4] should be clamped to 0 once fully faded, got " .. tostring(p.sprite.color[4]))
+    print("PASS: jigsaw_piece: update_fade() fades alpha to 0 over time and reports completion")
+end
+
+-- JigsawSolver.is_assembled -------------------------------------------------
+local JigsawSolver = require("game/jigsaw_solver")
+
+-- Builds an array of 9 fake piece tables (same minimal shape as fake_piece
+-- above) arranged correctly relative to each other, with the whole grid
+-- offset by (ox, oy) slots from the world origin.
+local function build_assembled_pieces(ox, oy)
+    local pieces = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            pieces[#pieces + 1] = {
+                rotation_step = 0,
+                row = row,
+                col = col,
+                sprite = { x = (col + ox) * C.SLOT, y = (row + oy) * C.SLOT },
+            }
+        end
+    end
+    return pieces
+end
+
+do
+    local pieces = build_assembled_pieces(0, 0)
+    table.remove(pieces)  -- drop to 8 well-formed pieces
+    assert(JigsawSolver.is_assembled(pieces) == false,
+        "is_assembled should be false for fewer than C.PUZZLE_PIECE_COUNT pieces")
+    print("PASS: jigsaw_solver: is_assembled() is false with fewer than 9 pieces")
+end
+
+do
+    local pieces = build_assembled_pieces(0, 0)
+    pieces[1].rotation_step = 1
+    assert(JigsawSolver.is_assembled(pieces) == false,
+        "is_assembled should be false when any piece has a non-zero rotation_step")
+    print("PASS: jigsaw_solver: is_assembled() is false when a piece is rotated")
+end
+
+do
+    -- Swap two pieces' sprite positions so their (row, col) identities no
+    -- longer match their placement, while rotation stays correct and the
+    -- count stays at 9 -- the relative arrangement is now wrong.
+    local pieces = build_assembled_pieces(0, 0)
+    local ax, ay = pieces[1].sprite.x, pieces[1].sprite.y
+    pieces[1].sprite.x, pieces[1].sprite.y = pieces[2].sprite.x, pieces[2].sprite.y
+    pieces[2].sprite.x, pieces[2].sprite.y = ax, ay
+    assert(JigsawSolver.is_assembled(pieces) == false,
+        "is_assembled should be false when the relative arrangement is wrong")
+    print("PASS: jigsaw_solver: is_assembled() is false when two pieces' positions are swapped")
+end
+
+do
+    local pieces_origin  = build_assembled_pieces(0, 0)
+    local pieces_shifted = build_assembled_pieces(3, 3)
+    assert(JigsawSolver.is_assembled(pieces_origin) == true,
+        "is_assembled should be true for a correctly arranged puzzle at the world origin")
+    assert(JigsawSolver.is_assembled(pieces_shifted) == true,
+        "is_assembled should be true for a correctly arranged puzzle shifted by a constant offset")
+    print("PASS: jigsaw_solver: is_assembled() is true regardless of the puzzle's absolute world position")
+end
+
+-- integration: assembling the puzzle vanishes pieces, then removes them ---
+-- from both gs.pieces and the Drawer once their fade completes (GameScene) -
+
+do
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    -- Replace whatever the box set up in on_enter() with 9 correctly
+    -- arranged, unrotated pieces so JigsawSolver.is_assembled(gs.pieces) is
+    -- true as soon as gs:update()'s solved-check runs.
+    gs.pieces = {}
+    gs.pieces_in_drawer = {}
+    local spawned = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local p = JigsawPiece.new(col * C.SLOT, {1, 1, 1, 1},
+                { image = {}, quad = {}, row = row, col = col })
+            p.sprite.y = row * C.SLOT
+            gs.pieces[#gs.pieces + 1] = p
+            spawned[#spawned + 1] = p
+            gs.drawer:add(p, C.PRIORITY_PIECE)
+            gs.pieces_in_drawer[p] = true
+        end
+    end
+    assert(#gs.pieces == C.PUZZLE_PIECE_COUNT, "test setup should have 9 pieces before update()")
+
+    -- First update(): the one-shot solved check fires (assembled == true),
+    -- start_vanish() runs on every piece, and the same call already drives
+    -- one small update_fade() tick on each piece since it's now "vanishing".
+    gs:update(1 / 60)
+
+    assert(gs.puzzle_solved == true, "puzzle_solved should be set true once the arrangement is detected")
+    for _, p in ipairs(spawned) do
+        assert(p.state == "vanishing", "every piece should be in the 'vanishing' state after the solved check fires")
+    end
+    assert(#gs.pieces == C.PUZZLE_PIECE_COUNT,
+        "pieces should not be removed yet after only one small fade tick")
+
+    -- Drive enough more time for the fade to fully complete.
+    gs:update(C.PIECE_FADE_DURATION)
+
+    assert(#gs.pieces == 0,
+        "all pieces should be removed from gs.pieces once their fade completes, got " .. #gs.pieces)
+    for _, p in ipairs(spawned) do
+        assert(gs.pieces_in_drawer[p] == nil, "vanished piece should be cleared from pieces_in_drawer")
+        local found_in_drawer = false
+        for _, entry in ipairs(gs.drawer.layers) do
+            if entry.sprite == p then found_in_drawer = true end
+        end
+        assert(not found_in_drawer, "vanished piece should no longer appear in the Drawer's layers")
+    end
+    print("PASS: game_scene: assembling the puzzle fades out and removes all pieces from gs.pieces and the Drawer")
+end
+
 print("ALL TESTS PASSED")

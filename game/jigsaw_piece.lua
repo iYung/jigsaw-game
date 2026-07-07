@@ -14,6 +14,8 @@ function JigsawPiece.new(x, color, visual)
     if visual then
         self.sprite.image = visual.image
         self.sprite.quad = visual.quad
+        self.row = visual.row
+        self.col = visual.col
     end
     self.state = "grounded"
     self.rotation_step = 0
@@ -33,6 +35,17 @@ function JigsawPiece:drop(x, y)
     self.sprite.x = math.floor(x / C.SLOT + 0.5) * C.SLOT
     self.sprite.y = math.floor(y / C.SLOT + 0.5) * C.SLOT
     self.state = "grounded"
+end
+
+function JigsawPiece:start_vanish()
+    self.state = "vanishing"
+    self.fade_timer = C.PIECE_FADE_DURATION
+end
+
+function JigsawPiece:update_fade(dt)
+    self.fade_timer = self.fade_timer - dt
+    self.sprite.color[4] = math.max(0, self.fade_timer / C.PIECE_FADE_DURATION)
+    return self.fade_timer <= 0
 end
 
 function JigsawPiece:update(player)

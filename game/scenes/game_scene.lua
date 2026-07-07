@@ -3,6 +3,7 @@ local Sprite     = require("lua/core/sprite")
 local Player     = require("game/player")
 local C          = require("game/constants")
 local JigsawBox  = require("game/jigsaw_box")
+local JigsawSolver = require("game/jigsaw_solver")
 
 local GameScene = {}
 GameScene.__index = GameScene
@@ -29,6 +30,7 @@ function GameScene:on_enter()
 
     self.pieces = {}
     self.pieces_in_drawer = {}
+    self.puzzle_solved = false
 
     self.box = JigsawBox.new(5 * C.SLOT, 3 * C.SLOT)
     self.drawer:add(self.box, C.PRIORITY_PIECE)
@@ -50,6 +52,25 @@ function GameScene:update(dt)
     end
 
     self.player:update(dt, self.pieces, self.box, self.drawer)
+
+    if not self.puzzle_solved and JigsawSolver.is_assembled(self.pieces) then
+        self.puzzle_solved = true
+        for _, piece in ipairs(self.pieces) do
+            piece:start_vanish()
+        end
+    end
+
+    for i = #self.pieces, 1, -1 do
+        local piece = self.pieces[i]
+        if piece.state == "vanishing" then
+            local finished = piece:update_fade(dt)
+            if finished then
+                table.remove(self.pieces, i)
+                self.drawer:remove(piece)
+                self.pieces_in_drawer[piece] = nil
+            end
+        end
+    end
 
     self.player.sprite.x = math.max(0, math.min(self.player.sprite.x, self.world_w - 32))
 

@@ -530,9 +530,9 @@ do
     -- calls, following the same spy-and-restore pattern used above for
     -- love.graphics.newQuad, to capture which path each construction loads.
     local expected_paths = {
-        ["assets/puzzles/gradient_3x3.png"] = true,
-        ["assets/puzzles/diagonal_3x3.png"] = true,
-        ["assets/puzzles/stripes_3x3.png"]  = true,
+        ["assets/puzzles/1.png"] = true,
+        ["assets/puzzles/2.png"] = true,
+        ["assets/puzzles/3.png"] = true,
     }
 
     local real_newImage = love.graphics.newImage

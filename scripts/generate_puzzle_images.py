@@ -38,9 +38,9 @@ STRIPE_CORAL = (220, 90, 60)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PUZZLES_DIR = REPO_ROOT / "assets" / "puzzles"
-GRADIENT_OUTPUT_PATH = PUZZLES_DIR / "gradient_3x3.png"
-DIAGONAL_OUTPUT_PATH = PUZZLES_DIR / "diagonal_3x3.png"
-STRIPES_OUTPUT_PATH = PUZZLES_DIR / "stripes_3x3.png"
+GRADIENT_OUTPUT_PATH = PUZZLES_DIR / "1.png"
+DIAGONAL_OUTPUT_PATH = PUZZLES_DIR / "2.png"
+STRIPES_OUTPUT_PATH = PUZZLES_DIR / "3.png"
 
 
 def generate_gradient() -> Image.Image:

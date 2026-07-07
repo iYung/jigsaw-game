@@ -11,12 +11,14 @@ local PUZZLE_IMAGES = {
 local JigsawBox = {}
 JigsawBox.__index = JigsawBox
 
-function JigsawBox.new(x, y)
+function JigsawBox.new(x, y, world_w, world_h)
     local self = setmetatable({}, JigsawBox)
     self.sprite = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.color = {1, 0.75, 0.2, 1}
     self.state = "waiting"
     self.spawn_timer = 0
+    self.world_w = world_w
+    self.world_h = world_h
 
     local puzzle_image = love.graphics.newImage(PUZZLE_IMAGES[math.random(#PUZZLE_IMAGES)])
     local imgW, imgH = puzzle_image:getDimensions()
@@ -44,6 +46,7 @@ function JigsawBox:interact()
     if self.state == "waiting" then
         self.state = "ejecting"
         self.spawn_timer = 0
+        self.sprite.visible = false
     end
 end
 
@@ -81,6 +84,7 @@ function JigsawBox:_eject_next(pieces)
         for _, pair in ipairs(candidates) do
             local tx = bx + pair[1] * C.SLOT
             local ty = by + pair[2] * C.SLOT
+            local out_of_bounds = tx < 0 or tx >= self.world_w or ty < 0 or ty >= self.world_h
             local occupied = false
             for _, p in ipairs(pieces) do
                 if p.state == "grounded" and p.sprite.x == tx and p.sprite.y == ty then
@@ -88,7 +92,7 @@ function JigsawBox:_eject_next(pieces)
                     break
                 end
             end
-            if not occupied then
+            if not occupied and not out_of_bounds then
                 cx, cy = tx, ty
                 break
             end

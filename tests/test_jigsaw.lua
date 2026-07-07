@@ -392,4 +392,183 @@ do
     print("PASS: jigsaw_box: ejected piece's sprite carries non-nil image and quad (visual wiring)")
 end
 
+-- Drawer:remove ------------------------------------------------------------
+
+do
+    local Drawer = require("lua/core/drawer")
+    local Sprite = require("lua/core/sprite")
+
+    local drawer = Drawer.new()
+    local sA = Sprite.new(0, 0, 10, 10)
+    local sB = Sprite.new(0, 0, 10, 10)
+    local sC = Sprite.new(0, 0, 10, 10)
+    drawer:add(sA, 1)
+    drawer:add(sB, 2)
+    drawer:add(sC, 3)
+
+    drawer:remove(sB)
+
+    assert(#drawer.layers == 2,
+        "layers should have 2 entries after removing one of 3, got " .. #drawer.layers)
+    for _, entry in ipairs(drawer.layers) do
+        assert(entry.sprite ~= sB, "removed sprite should not appear in layers")
+    end
+    local found_a, found_c = false, false
+    for _, entry in ipairs(drawer.layers) do
+        if entry.sprite == sA then found_a = true end
+        if entry.sprite == sC then found_c = true end
+    end
+    assert(found_a and found_c, "remaining sprites should still be present in layers")
+    print("PASS: drawer: remove() removes the matching entry and leaves others intact")
+end
+
+do
+    local Drawer = require("lua/core/drawer")
+    local Sprite = require("lua/core/sprite")
+
+    local drawer = Drawer.new()
+    local sA = Sprite.new(0, 0, 10, 10)
+    local sOther = Sprite.new(0, 0, 10, 10)  -- never added to drawer
+    drawer:add(sA, 1)
+
+    drawer:remove(sOther)
+
+    assert(#drawer.layers == 1,
+        "layers should be unchanged when removing a sprite that was never added, got " .. #drawer.layers)
+    assert(drawer.layers[1].sprite == sA, "the only entry should still be sA")
+    print("PASS: drawer: remove() no-ops when sprite is not present")
+end
+
+-- pick-up removes the piece from both pieces[] and the Drawer --------------
+
+do
+    local Player        = require("game/player")
+    local HeadlessInput = require("lua/headless/input")
+    local Drawer        = require("lua/core/drawer")
+
+    local drawer = Drawer.new()
+    -- Grounded at (0, 192) -> centre (32, 224).
+    local piece = JigsawPiece.new(0, {1, 0, 0, 1})
+    drawer:add(piece, C.PRIORITY_PIECE)
+    local pieces = { piece }
+
+    -- Player centre (32, 224) exactly matches the piece's centre, well
+    -- within the 1.5*U pick-up range.
+    local player = Player.new(16, 200)
+    player.input = HeadlessInput.new()
+
+    player.input:press("interact")
+    player:update(1 / 60, pieces, nil, drawer)
+
+    assert(#pieces == 0, "pieces array should be empty after pick-up, got " .. #pieces)
+    local found_in_drawer = false
+    for _, entry in ipairs(drawer.layers) do
+        if entry.sprite == piece then found_in_drawer = true end
+    end
+    assert(not found_in_drawer, "picked-up piece should be removed from drawer.layers")
+    assert(player.held_piece == piece, "player.held_piece should be the picked-up piece")
+    print("PASS: player: pick-up removes piece from both the pieces array and the Drawer")
+end
+
+-- drop re-inserts the piece into pieces[] and the Drawer at C.PRIORITY_PIECE
+
+do
+    local Player        = require("game/player")
+    local HeadlessInput = require("lua/headless/input")
+    local Drawer        = require("lua/core/drawer")
+
+    local piece = JigsawPiece.new(0, {1, 0, 0, 1})
+    piece:pick_up()
+
+    local player = Player.new(16, 200)
+    player.input = HeadlessInput.new()
+    player.held_piece = piece
+
+    local pieces = {}
+    local drawer = Drawer.new()
+
+    player.input:press("interact")
+    player:update(1 / 60, pieces, nil, drawer)
+
+    local found_in_pieces = false
+    for _, p in ipairs(pieces) do
+        if p == piece then found_in_pieces = true end
+    end
+    assert(found_in_pieces, "dropped piece should be re-inserted into the pieces array")
+
+    local found_in_drawer, drawer_priority = false, nil
+    for _, entry in ipairs(drawer.layers) do
+        if entry.sprite == piece then
+            found_in_drawer = true
+            drawer_priority = entry.priority
+        end
+    end
+    assert(found_in_drawer, "dropped piece should be re-added to the Drawer")
+    assert(drawer_priority == C.PRIORITY_PIECE,
+        "dropped piece's drawer priority should be C.PRIORITY_PIECE (" .. C.PRIORITY_PIECE ..
+        "), got " .. tostring(drawer_priority))
+    assert(player.held_piece == nil, "player.held_piece should be nil after drop")
+    print("PASS: player: drop re-inserts piece into pieces and re-adds it to the Drawer at C.PRIORITY_PIECE")
+end
+
+-- Player:draw() draws the held piece after the player's own sprite --------
+
+do
+    local Player = require("game/player")
+
+    local player = Player.new(0, 0)
+    local piece = JigsawPiece.new(0, {1, 0, 0, 1})
+    player.held_piece = piece
+
+    local call_order = {}
+    local orig_player_draw = player.sprite.draw
+    local orig_piece_draw  = piece.sprite.draw
+
+    player.sprite.draw = function(self)
+        call_order[#call_order + 1] = "player"
+        return orig_player_draw(self)
+    end
+    piece.sprite.draw = function(self)
+        call_order[#call_order + 1] = "piece"
+        return orig_piece_draw(self)
+    end
+
+    player:draw()
+
+    player.sprite.draw = orig_player_draw
+    piece.sprite.draw  = orig_piece_draw
+
+    assert(#call_order == 2,
+        "both player and held piece sprites should draw, got " .. #call_order .. " calls")
+    assert(call_order[1] == "player",
+        "player's own sprite should draw first, got " .. tostring(call_order[1]))
+    assert(call_order[2] == "piece",
+        "held piece's sprite should draw second, got " .. tostring(call_order[2]))
+    print("PASS: player: draw() draws the held piece's sprite after the player's own sprite")
+end
+
+do
+    local Player = require("game/player")
+
+    local player = Player.new(0, 0)
+    player.held_piece = nil
+
+    local call_order = {}
+    local orig_player_draw = player.sprite.draw
+    player.sprite.draw = function(self)
+        call_order[#call_order + 1] = "player"
+        return orig_player_draw(self)
+    end
+
+    local ok, err = pcall(function() player:draw() end)
+
+    player.sprite.draw = orig_player_draw
+
+    assert(ok, "draw() should not error when no piece is held: " .. tostring(err))
+    assert(#call_order == 1,
+        "only the player's own sprite should draw when no piece is held, got " .. #call_order)
+    assert(call_order[1] == "player", "the single draw call should be the player's sprite")
+    print("PASS: player: draw() with no held piece only draws the player's own sprite, without error")
+end
+
 print("ALL TESTS PASSED")

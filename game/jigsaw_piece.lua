@@ -25,9 +25,9 @@ function JigsawPiece:pick_up()
     self.state = "held"
 end
 
-function JigsawPiece:drop()
-    self.sprite.x = math.floor(self.sprite.x / C.SLOT + 0.5) * C.SLOT
-    self.sprite.y = math.floor(self.sprite.y / C.SLOT + 0.5) * C.SLOT
+function JigsawPiece:drop(x, y)
+    self.sprite.x = math.floor(x / C.SLOT + 0.5) * C.SLOT
+    self.sprite.y = math.floor(y / C.SLOT + 0.5) * C.SLOT
     self.state = "grounded"
 end
 

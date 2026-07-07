@@ -9,7 +9,7 @@ A 2D jigsaw puzzle game built with Love2D.
 - **R** — rotate held piece 90°
 - **ESC** — quit
 
-The world starts with a gold **box** near the player. Press **E** next to it to eject the nine jigsaw pieces (a 3x3 slice of a randomly chosen puzzle image — see `assets/puzzles/`) one by one, in shuffled order and with a random initial rotation, into adjacent slots. The box disappears once all pieces are out. Dropped pieces snap to the 64px (2U) world grid. Once all nine pieces are correctly arranged relative to each other (right rotation, right relative position — anywhere in the world, not just next to the box), the pieces fade out and disappear.
+The world starts with a gold **box** near the player. Press **E** next to it to eject the nine jigsaw pieces (a 3x3 slice of a randomly chosen puzzle image — see `assets/puzzles/`) one by one, in shuffled order and with a random initial rotation, into adjacent slots. The box disappears once all pieces are out. Dropped pieces snap to the 64px (2U) world grid. While carrying a piece, a faint ghost copy of it is drawn on the ground at the spot it would land if dropped right now, so you can preview the drop location before committing. Once all nine pieces are correctly arranged relative to each other (right rotation, right relative position — anywhere in the world, not just next to the box), the pieces fade out and disappear.
 
 ## Structure
 
@@ -17,7 +17,7 @@ The world starts with a gold **box** near the player. Press **E** next to it to 
 game/           Game-specific code
   constants.lua   U=32 base unit, SLOT=64 world grid size
   jigsaw_box.lua   JigsawBox entity (loads/slices the puzzle image into 9 quads, shuffles ejection order + initial rotation, timed piece ejection, Manhattan slot search)
-  jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap; optional image+quad visual; fade-out "vanishing" state on solve)
+  jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap; optional image+quad visual; fade-out "vanishing" state on solve; draw_ghost() faint drop-location preview)
   jigsaw_solver.lua Puzzle-completion check (is_assembled) — true when all 9 pieces are unrotated and in correct relative arrangement, regardless of absolute world position
   player.lua      Player movement and piece interaction
   scenes/         GameScene

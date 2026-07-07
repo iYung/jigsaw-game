@@ -63,4 +63,18 @@ function JigsawPiece:draw()
     self.sprite:draw()
 end
 
+function JigsawPiece:draw_ghost(x, y, alpha)
+    alpha = alpha or 0.35
+    local orig_x = self.sprite.x
+    local orig_y = self.sprite.y
+    local orig_a = self.sprite.color[4]
+    self.sprite.x = x
+    self.sprite.y = y
+    self.sprite.color[4] = alpha
+    self.sprite:draw()
+    self.sprite.x = orig_x
+    self.sprite.y = orig_y
+    self.sprite.color[4] = orig_a
+end
+
 return JigsawPiece

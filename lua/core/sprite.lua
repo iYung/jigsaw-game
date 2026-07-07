@@ -14,6 +14,7 @@ function Sprite.new(x, y, w, h)
     self.color    = {1, 1, 1, 1}
     self.shader   = nil
     self.image    = nil
+    self.quad     = nil
     return self
 end
 
@@ -26,9 +27,24 @@ function Sprite:draw()
     if self.shader then love.graphics.setShader(self.shader) end
     love.graphics.setColor(self.color)
     if self.image then
-        local sx = self.width  / self.image:getWidth()
-        local sy = self.height / self.image:getHeight()
-        love.graphics.draw(self.image, -self.width / 2, -self.height / 2, 0, sx, sy)
+        if self.quad then
+            local qw, qh
+            if self.quad.getViewport then
+                local _, _, vw, vh = self.quad:getViewport()
+                qw, qh = vw, vh
+            elseif self.quad.getWidth and self.quad.getHeight then
+                qw, qh = self.quad:getWidth(), self.quad:getHeight()
+            else
+                qw, qh = self.image:getWidth(), self.image:getHeight()
+            end
+            local sx = self.width  / qw
+            local sy = self.height / qh
+            love.graphics.draw(self.image, self.quad, -self.width / 2, -self.height / 2, 0, sx, sy)
+        else
+            local sx = self.width  / self.image:getWidth()
+            local sy = self.height / self.image:getHeight()
+            love.graphics.draw(self.image, -self.width / 2, -self.height / 2, 0, sx, sy)
+        end
     else
         love.graphics.rectangle("fill", -self.width / 2, -self.height / 2, self.width, self.height)
     end

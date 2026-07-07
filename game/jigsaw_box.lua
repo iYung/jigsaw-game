@@ -11,11 +11,25 @@ function JigsawBox.new(x, y)
     self.sprite.color = {1, 0.75, 0.2, 1}
     self.state = "waiting"
     self.spawn_timer = 0
-    self.pieces_to_spawn = {
-        {1, 0.3, 0.3, 1},
-        {0.3, 0.6, 1, 1},
-        {0.3, 1, 0.5, 1},
-    }
+
+    local puzzle_image = love.graphics.newImage("assets/puzzles/gradient_3x3.png")
+    local imgW, imgH = puzzle_image:getDimensions()
+    local cellW = imgW / 3
+    local cellH = imgH / 3
+
+    self.pieces_to_spawn = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local quad = love.graphics.newQuad(col * cellW, row * cellH, cellW, cellH, imgW, imgH)
+            self.pieces_to_spawn[#self.pieces_to_spawn + 1] = { image = puzzle_image, quad = quad }
+        end
+    end
+
+    for i = #self.pieces_to_spawn, 2, -1 do
+        local j = math.random(i)
+        self.pieces_to_spawn[i], self.pieces_to_spawn[j] = self.pieces_to_spawn[j], self.pieces_to_spawn[i]
+    end
+
     self.spawned = {}
     return self
 end
@@ -37,7 +51,7 @@ function JigsawBox:update(dt, pieces)
 end
 
 function JigsawBox:_eject_next(pieces)
-    local color = table.remove(self.pieces_to_spawn, 1)
+    local spec = table.remove(self.pieces_to_spawn, 1)
     local bx = self.sprite.x
     local by = self.sprite.y
 
@@ -76,8 +90,13 @@ function JigsawBox:_eject_next(pieces)
         if cx then break end
     end
 
-    local piece = JigsawPiece.new(cx, color)
+    local piece = JigsawPiece.new(cx, {1, 1, 1, 1}, spec)
     piece.sprite.y = cy
+
+    local rotations = math.random(0, 3)
+    for _ = 1, rotations do
+        piece:rotate()
+    end
 
     pieces[#pieces + 1] = piece
     self.spawned[#self.spawned + 1] = piece

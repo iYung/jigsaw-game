@@ -6,11 +6,15 @@ JigsawPiece.__index = JigsawPiece
 
 local GROUND_Y = 3 * C.SLOT  -- 192 (ground sits at 4*SLOT=256, pieces rest on top)
 
-function JigsawPiece.new(x, color)
+function JigsawPiece.new(x, color, visual)
     local self = setmetatable({}, JigsawPiece)
     self.sprite = Sprite.new(x, GROUND_Y, C.SLOT, C.SLOT)
     self.sprite.color = color
     self.sprite.rotation = 0
+    if visual then
+        self.sprite.image = visual.image
+        self.sprite.quad = visual.quad
+    end
     self.state = "grounded"
     self.rotation_step = 0
     return self

@@ -542,9 +542,8 @@ do
         return real_newImage(path, ...)
     end
 
-    local boxes = {}
     for trial = 1, 10 do
-        boxes[trial] = JigsawBox.new(128, 128)
+        JigsawBox.new(128, 128)
     end
 
     love.graphics.newImage = real_newImage
@@ -572,25 +571,6 @@ do
         "captured path was " .. tostring(captured_paths[1]) .. " in every one of " ..
         #captured_paths .. " trials -- expected some variety from the random image selection")
     print("PASS: jigsaw_box: new() picks varied puzzle images across multiple constructions (not always the same one)")
-
-    -- box.puzzle_number is wired correctly: it's one of {1,2,3} and matches
-    -- the specific path that was loaded for that same trial, not just any
-    -- valid-looking number.
-    local path_to_number = {
-        ["assets/puzzles/1.png"] = 1,
-        ["assets/puzzles/2.png"] = 2,
-        ["assets/puzzles/3.png"] = 3,
-    }
-    for i, box in ipairs(boxes) do
-        local number = box.puzzle_number
-        assert(number == 1 or number == 2 or number == 3,
-            "boxes[" .. i .. "].puzzle_number should be one of {1,2,3}, got " .. tostring(number))
-        assert(number == path_to_number[captured_paths[i]],
-            "boxes[" .. i .. "].puzzle_number (" .. tostring(number) ..
-            ") should match the number implied by its loaded path (" ..
-            tostring(captured_paths[i]) .. " -> " .. tostring(path_to_number[captured_paths[i]]) .. ")")
-    end
-    print("PASS: jigsaw_box: box.puzzle_number matches the puzzle image path loaded for that instance")
 end
 
 -- Drawer:remove ------------------------------------------------------------

@@ -22,7 +22,6 @@ function JigsawBox.new(x, y, world_w, world_h)
 
     local puzzle_entry = PUZZLE_IMAGES[math.random(#PUZZLE_IMAGES)]
     local puzzle_image = love.graphics.newImage(puzzle_entry.path)
-    self.puzzle_number = puzzle_entry.number
     local imgW, imgH = puzzle_image:getDimensions()
     local cellW = imgW / 3
     local cellH = imgH / 3

@@ -9,21 +9,21 @@ A 2D jigsaw puzzle game built with Love2D.
 - **R** — rotate held piece 90°
 - **ESC** — quit
 
-The world starts with a gold **box** near the player. Press **E** next to it to eject the three jigsaw pieces one by one into adjacent slots. The box disappears once all pieces are out. Dropped pieces snap to the 64px (2U) world grid.
+The world starts with a gold **box** near the player. Press **E** next to it to eject the nine jigsaw pieces (a 3x3 slice of `assets/puzzles/gradient_3x3.png`) one by one, in shuffled order and with a random initial rotation, into adjacent slots. The box disappears once all pieces are out. Dropped pieces snap to the 64px (2U) world grid.
 
 ## Structure
 
 ```
 game/           Game-specific code
   constants.lua   U=32 base unit, SLOT=64 world grid size
-  jigsaw_box.lua   JigsawBox entity (timed piece ejection, Manhattan slot search)
-  jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap)
+  jigsaw_box.lua   JigsawBox entity (loads/slices the puzzle image into 9 quads, shuffles ejection order + initial rotation, timed piece ejection, Manhattan slot search)
+  jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap; optional image+quad visual)
   player.lua      Player movement and piece interaction
   scenes/         GameScene
-lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite, etc.
+lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite (optional quad sub-rectangle drawing), etc.
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
 tests/          Test files — run with: love . --headless
-assets/         Images and other assets
+assets/         Images and other assets (assets/puzzles/gradient_3x3.png — 3x3 puzzle source image; see scripts/generate_puzzle_gradient.py)
 conf.lua        Window config; suppresses graphics/audio modules under --headless
 main.lua        Entry point — canvas rendering with letterboxing, pixel-art filter
 ```

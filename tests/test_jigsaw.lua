@@ -206,8 +206,8 @@ local JigsawBox = require("game/jigsaw_box")
 do
     local box = JigsawBox.new(128, 128)
     assert(box.state == "waiting",       "new box should be in state 'waiting'")
-    assert(#box.pieces_to_spawn == 3,    "new box should have 3 items in pieces_to_spawn")
-    print("PASS: jigsaw_box: new() creates box in state 'waiting' with 3 pieces queued")
+    assert(#box.pieces_to_spawn == 9,    "new box should have 9 items in pieces_to_spawn (3x3 grid)")
+    print("PASS: jigsaw_box: new() creates box in state 'waiting' with 9 pieces queued")
 end
 
 -- interact() --------------------------------------------------------------
@@ -228,22 +228,25 @@ do
     box:interact()
     box:update(1.0, pieces)
     assert(#pieces == 1,              "one piece should be ejected after first update")
-    assert(box.state == "ejecting",   "state should still be 'ejecting' with 2 pieces remaining")
+    assert(box.state == "ejecting",   "state should still be 'ejecting' with 8 pieces remaining")
     print("PASS: jigsaw_box: update() ejects one piece per large-dt call, state stays 'ejecting'")
 end
 
--- update() x3 ejects all pieces, state becomes done ---------------------
+-- update() x9 ejects all pieces, state becomes done ----------------------
 
 do
     local box = JigsawBox.new(128, 128)
     local pieces = {}
     box:interact()
+    for i = 1, 8 do
+        box:update(1.0, pieces)
+        assert(box.state == "ejecting",
+            "state should still be 'ejecting' after " .. i .. " of 9 updates")
+    end
     box:update(1.0, pieces)
-    box:update(1.0, pieces)
-    box:update(1.0, pieces)
-    assert(#pieces == 3,        "three pieces should be ejected after three updates")
-    assert(box.state == "done", "state should be 'done' after all pieces ejected")
-    print("PASS: jigsaw_box: after 3 updates all pieces ejected and state is 'done'")
+    assert(#pieces == 9,        "nine pieces should be ejected after nine updates")
+    assert(box.state == "done", "state should be 'done' only once all 9 pieces are ejected")
+    print("PASS: jigsaw_box: after 9 updates all pieces ejected and state is 'done' (not before)")
 end
 
 -- slot search skips occupied slots ----------------------------------------
@@ -266,6 +269,127 @@ do
     assert(not (new_piece.sprite.x == blocked_x and new_piece.sprite.y == blocked_y),
         "ejected piece must not land on the occupied slot")
     print("PASS: jigsaw_box: slot search skips grounded-piece-occupied slots")
+end
+
+-- pieces_to_spawn slices the image into 9 distinct cells (shuffle) --------
+
+do
+    -- The headless stub's love.graphics.newQuad (lua/headless/stubs.lua)
+    -- falls through the catch-all new*-handler and returns a bare table with
+    -- no getViewport()/coordinate info, so a quad object alone can't tell us
+    -- which grid cell it represents. To still verify the slicing/shuffle is
+    -- correct, spy on love.graphics.newQuad for the duration of JigsawBox.new
+    -- and record which (col, row) each *returned quad table* corresponds to,
+    -- keyed by table identity. This only touches the test's local view of
+    -- love.graphics, not the stub file itself.
+    local real_newQuad = love.graphics.newQuad
+    local cell_of = {}  -- quad (table identity) -> "col,row"
+    love.graphics.newQuad = function(qx, qy, qw, qh, imgW, imgH)
+        local quad = real_newQuad(qx, qy, qw, qh, imgW, imgH)
+        local col = math.floor(qx / qw + 0.5)
+        local row = math.floor(qy / qh + 0.5)
+        cell_of[quad] = col .. "," .. row
+        return quad
+    end
+
+    local box = JigsawBox.new(0, 0)
+    love.graphics.newQuad = real_newQuad
+
+    assert(#box.pieces_to_spawn == 9, "pieces_to_spawn should have 9 entries")
+
+    local seen = {}
+    for _, spec in ipairs(box.pieces_to_spawn) do
+        assert(spec.image ~= nil, "each pieces_to_spawn entry should carry a non-nil image")
+        assert(spec.quad  ~= nil, "each pieces_to_spawn entry should carry a non-nil quad")
+        local cell = cell_of[spec.quad]
+        assert(cell ~= nil, "spec.quad should be one of the quads created by JigsawBox.new")
+        assert(not seen[cell], "cell " .. cell .. " appears more than once in pieces_to_spawn")
+        seen[cell] = true
+    end
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local cell = col .. "," .. row
+            assert(seen[cell], "pieces_to_spawn is missing expected cell " .. cell)
+        end
+    end
+    print("PASS: jigsaw_box: pieces_to_spawn covers all 9 grid cells exactly once")
+end
+
+do
+    -- Probabilistic check that the 9 entries are actually shuffled (not left
+    -- in row-major construction order) across several fresh boxes. As with
+    -- other probabilistic assertions in this file, a false failure is
+    -- astronomically unlikely (would require 9! order to repeat unshuffled
+    -- every single trial) rather than impossible.
+    local real_newQuad = love.graphics.newQuad
+    local unshuffled_order = "0,0|1,0|2,0|0,1|1,1|2,1|0,2|1,2|2,2"
+    local orders = {}
+    for trial = 1, 8 do
+        local cell_of = {}
+        love.graphics.newQuad = function(qx, qy, qw, qh, imgW, imgH)
+            local quad = real_newQuad(qx, qy, qw, qh, imgW, imgH)
+            local col = math.floor(qx / qw + 0.5)
+            local row = math.floor(qy / qh + 0.5)
+            cell_of[quad] = col .. "," .. row
+            return quad
+        end
+        local box = JigsawBox.new(0, 0)
+        love.graphics.newQuad = real_newQuad
+
+        local order = {}
+        for i, spec in ipairs(box.pieces_to_spawn) do
+            order[i] = cell_of[spec.quad]
+        end
+        local key = table.concat(order, "|")
+        orders[#orders + 1] = key
+    end
+
+    local all_row_major = true
+    for _, key in ipairs(orders) do
+        if key ~= unshuffled_order then all_row_major = false break end
+    end
+    assert(not all_row_major,
+        "pieces_to_spawn order matched unshuffled row-major order in every trial -- shuffle may be missing")
+    print("PASS: jigsaw_box: pieces_to_spawn ejection order is shuffled (not row-major every time)")
+end
+
+-- ejected piece gets a random initial rotation_step ------------------------
+
+do
+    local rotation_steps = {}
+    for trial = 1, 12 do
+        local box = JigsawBox.new(128, 128)
+        box:interact()
+        local pieces = {}
+        box:update(1.0, pieces)
+        local piece = pieces[1]
+        local step = piece.rotation_step
+        assert(step == 0 or step == 1 or step == 2 or step == 3,
+            "ejected piece rotation_step should be one of 0,1,2,3, got " .. tostring(step))
+        rotation_steps[#rotation_steps + 1] = step
+    end
+
+    local all_same = true
+    for i = 2, #rotation_steps do
+        if rotation_steps[i] ~= rotation_steps[1] then all_same = false break end
+    end
+    assert(not all_same,
+        "rotation_step was " .. tostring(rotation_steps[1]) .. " in every one of " ..
+        #rotation_steps .. " trials -- expected some variety from the random initial rotation")
+    print("PASS: jigsaw_box: ejected pieces get a random initial rotation_step in {0,1,2,3}, with variety across ejections")
+end
+
+-- ejected piece carries non-nil image + quad (visual wiring) --------------
+
+do
+    local box = JigsawBox.new(128, 128)
+    box:interact()
+    local pieces = {}
+    box:update(1.0, pieces)
+    local piece = pieces[1]
+    assert(piece.sprite.image ~= nil, "ejected piece's sprite.image should be non-nil")
+    assert(piece.sprite.quad  ~= nil, "ejected piece's sprite.quad should be non-nil")
+    print("PASS: jigsaw_box: ejected piece's sprite carries non-nil image and quad (visual wiring)")
 end
 
 print("ALL TESTS PASSED")

@@ -1197,6 +1197,38 @@ do
     print("PASS: game_scene: _spawn_box() places boxes on grid-aligned, in-bounds, non-colliding cells")
 end
 
+-- checkerboard floor -----------------------------------------------------
+-- GameScene:on_enter() halves the world size and replaces self.ground with
+-- self.floor, a plain-table drawable registered in the drawer at priority 0
+-- (docs/design/checkerboard-floor.md, docs/checklists/checkerboard-floor.md)
+
+do
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    assert(gs.world_w == 20 * C.SLOT,
+        "world_w should be halved to 20*C.SLOT (1280), got " .. tostring(gs.world_w))
+    assert(gs.world_h == 20 * C.SLOT,
+        "world_h should be halved to 20*C.SLOT (1280), got " .. tostring(gs.world_h))
+    assert(gs.ground == nil, "gs.ground should no longer exist")
+    assert(type(gs.floor) == "table", "gs.floor should exist as a table")
+    assert(type(gs.floor.draw) == "function", "gs.floor should have a draw function")
+
+    local found_entry = nil
+    for _, entry in ipairs(gs.drawer.layers) do
+        if entry.sprite == gs.floor then found_entry = entry end
+    end
+    assert(found_entry ~= nil, "gs.floor should be registered in the drawer's layers")
+    assert(found_entry.priority == 0,
+        "gs.floor should be registered at priority 0, got " .. tostring(found_entry.priority))
+
+    local ok, err = pcall(function() gs.floor.draw() end)
+    assert(ok, "gs.floor.draw() should not error under the headless love.graphics stub: " .. tostring(err))
+    print("PASS: game_scene: on_enter() halves world size and replaces self.ground with self.floor (checkerboard, priority 0)")
+end
+
 -- Player:update interacts with the nearest of several waiting boxes ---------
 
 do

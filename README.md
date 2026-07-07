@@ -11,7 +11,7 @@ A 2D jigsaw puzzle game built with Love2D.
 
 The world starts with a gold **box** near the player. Press **E** next to it and the box disappears instantly, while the nine jigsaw pieces (a 3x3 slice of a randomly chosen puzzle image — see `assets/puzzles/`) continue to eject one by one in the background, in shuffled order and with a random initial rotation, into adjacent slots. Dropped pieces snap to the 64px (2U) world grid. While carrying a piece, a faint ghost copy of it is drawn on the ground at the spot it would land if dropped right now, so you can preview the drop location before committing. Once all nine pieces are correctly arranged relative to each other (right rotation, right relative position — anywhere in the world, not just next to the box), the pieces fade out and disappear.
 
-A red **spawn button** sits at the top-centre of the (square, 2560×2560) world. Walk up to it and press **E** to spawn a brand-new gold box at a random grid-aligned spot anywhere in the world, letting you generate additional puzzles on demand.
+A red **spawn button** sits at the top-centre of the (square, 1280×1280) world, which is rendered as a checkerboard floor alternating between two gray shades per 64px grid cell. Walk up to it and press **E** to spawn a brand-new gold box at a random grid-aligned spot anywhere in the world, letting you generate additional puzzles on demand.
 
 ## Structure
 

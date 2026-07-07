@@ -31,7 +31,7 @@ function GameScene:on_enter()
     self.pieces_in_drawer = {}
 
     self.box = JigsawBox.new(5 * C.SLOT, 3 * C.SLOT)
-    self.drawer:add(self.box, 5)
+    self.drawer:add(self.box, C.PRIORITY_PIECE)
 end
 
 function GameScene:update(dt)
@@ -39,7 +39,7 @@ function GameScene:update(dt)
 
     for _, piece in ipairs(self.pieces) do
         if not self.pieces_in_drawer[piece] then
-            self.drawer:add(piece, 5)
+            self.drawer:add(piece, C.PRIORITY_PIECE)
             self.pieces_in_drawer[piece] = true
         end
     end
@@ -49,7 +49,7 @@ function GameScene:update(dt)
         self.box = nil
     end
 
-    self.player:update(dt, self.pieces, self.box)
+    self.player:update(dt, self.pieces, self.box, self.drawer)
 
     self.player.sprite.x = math.max(0, math.min(self.player.sprite.x, self.world_w - 32))
 

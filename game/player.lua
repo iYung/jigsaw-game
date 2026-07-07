@@ -23,7 +23,7 @@ function Player.new(x, y)
     return self
 end
 
-function Player:update(dt, pieces, box)
+function Player:update(dt, pieces, box, drawer)
     self.input:update()
     local s = self.sprite
     if self.input:is_down("left")  then s.x = s.x - SPEED * dt end
@@ -50,6 +50,10 @@ function Player:update(dt, pieces, box)
             end
             if not occupied then
                 self.held_piece:drop(target_x, target_y)
+                pieces[#pieces + 1] = self.held_piece
+                if drawer then
+                    drawer:add(self.held_piece, C.PRIORITY_PIECE)
+                end
                 self.held_piece = nil
             end
         else
@@ -71,6 +75,15 @@ function Player:update(dt, pieces, box)
             end
             if nearest and nearest_dist <= 1.5 * C.U then
                 nearest:pick_up()
+                for i, piece in ipairs(pieces) do
+                    if piece == nearest then
+                        table.remove(pieces, i)
+                        break
+                    end
+                end
+                if drawer then
+                    drawer:remove(nearest)
+                end
                 self.held_piece = nearest
             end
             if self.held_piece == nil and box ~= nil and box.state == "waiting" then
@@ -102,6 +115,9 @@ end
 
 function Player:draw()
     self.sprite:draw()
+    if self.held_piece ~= nil then
+        self.held_piece:draw()
+    end
 end
 
 return Player

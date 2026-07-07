@@ -9,7 +9,7 @@ A 2D jigsaw puzzle game built with Love2D.
 - **R** — rotate held piece 90°
 - **ESC** — quit
 
-The world starts with a gold **box** near the player. Press **E** next to it to eject the nine jigsaw pieces (a 3x3 slice of `assets/puzzles/gradient_3x3.png`) one by one, in shuffled order and with a random initial rotation, into adjacent slots. The box disappears once all pieces are out. Dropped pieces snap to the 64px (2U) world grid. Once all nine pieces are correctly arranged relative to each other (right rotation, right relative position — anywhere in the world, not just next to the box), the pieces fade out and disappear.
+The world starts with a gold **box** near the player. Press **E** next to it to eject the nine jigsaw pieces (a 3x3 slice of a randomly chosen puzzle image — see `assets/puzzles/`) one by one, in shuffled order and with a random initial rotation, into adjacent slots. The box disappears once all pieces are out. Dropped pieces snap to the 64px (2U) world grid. Once all nine pieces are correctly arranged relative to each other (right rotation, right relative position — anywhere in the world, not just next to the box), the pieces fade out and disappear.
 
 ## Structure
 
@@ -24,7 +24,7 @@ game/           Game-specific code
 lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite (optional quad sub-rectangle drawing), etc.
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
 tests/          Test files — run with: love . --headless
-assets/         Images and other assets (assets/puzzles/gradient_3x3.png — 3x3 puzzle source image; see scripts/generate_puzzle_gradient.py)
+assets/         Images and other assets (assets/puzzles/*.png — 3x3 puzzle source images, one picked at random per box; see scripts/generate_puzzle_images.py)
 conf.lua        Window config; suppresses graphics/audio modules under --headless
 main.lua        Entry point — canvas rendering with letterboxing, pixel-art filter
 ```

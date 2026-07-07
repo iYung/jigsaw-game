@@ -392,6 +392,56 @@ do
     print("PASS: jigsaw_box: ejected piece's sprite carries non-nil image and quad (visual wiring)")
 end
 
+-- JigsawBox.new randomly selects one of the 3 puzzle images ----------------
+
+do
+    -- Spy on love.graphics.newImage for the duration of several JigsawBox.new()
+    -- calls, following the same spy-and-restore pattern used above for
+    -- love.graphics.newQuad, to capture which path each construction loads.
+    local expected_paths = {
+        ["assets/puzzles/gradient_3x3.png"] = true,
+        ["assets/puzzles/diagonal_3x3.png"] = true,
+        ["assets/puzzles/stripes_3x3.png"]  = true,
+    }
+
+    local real_newImage = love.graphics.newImage
+    local captured_paths = {}
+    love.graphics.newImage = function(path, ...)
+        captured_paths[#captured_paths + 1] = path
+        return real_newImage(path, ...)
+    end
+
+    for trial = 1, 10 do
+        JigsawBox.new(128, 128)
+    end
+
+    love.graphics.newImage = real_newImage
+
+    assert(#captured_paths == 10,
+        "expected 10 captured love.graphics.newImage calls, got " .. #captured_paths)
+    for i, path in ipairs(captured_paths) do
+        assert(expected_paths[path],
+            "captured path #" .. i .. " (" .. tostring(path) ..
+            ") should be one of the 3 expected puzzle images")
+    end
+    print("PASS: jigsaw_box: new() always loads one of the 3 expected puzzle images")
+
+    -- Probabilistic check that math.random selection actually produces
+    -- variety across trials, not just a hardcoded single path -- same
+    -- statistical approach as the shuffle-order and rotation_step variety
+    -- checks elsewhere in this file: with 3 equally likely options and 10
+    -- trials, all trials landing on the same path is astronomically unlikely
+    -- rather than impossible.
+    local all_same = true
+    for i = 2, #captured_paths do
+        if captured_paths[i] ~= captured_paths[1] then all_same = false break end
+    end
+    assert(not all_same,
+        "captured path was " .. tostring(captured_paths[1]) .. " in every one of " ..
+        #captured_paths .. " trials -- expected some variety from the random image selection")
+    print("PASS: jigsaw_box: new() picks varied puzzle images across multiple constructions (not always the same one)")
+end
+
 -- Drawer:remove ------------------------------------------------------------
 
 do

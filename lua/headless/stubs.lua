@@ -5,15 +5,26 @@
 local noop = function() end
 
 -- Stub image returned by any love.graphics.new*() call. Dimensions match the
--- real puzzle assets (assets/puzzles/*.png, 192x192 = 3*C.SLOT per side) so
--- that JigsawBox.new's fixed-cell-size grid inference (game/jigsaw_box.lua)
--- sees whole-number rows/cols under headless tests just like it does with
--- the real images.
-local function make_stub_image()
+-- real puzzle assets under assets/puzzles/<tier>/*.png so that JigsawBox.new's
+-- fixed-cell-size grid inference (game/jigsaw_box.lua) sees whole-number
+-- rows/cols under headless tests just like it does with the real images.
+-- Path-aware: love.graphics.newImage(path) forwards `path` here via the
+-- catch-all __index below, so the reported size varies by tier folder
+-- (/med/ -> 256x256, /hard/ -> 320x320). Any other call (e.g. newQuad, or
+-- newImage with no/other path) falls through to the 192x192 default.
+local function make_stub_image(path)
+  local width, height = 192, 192
+  if type(path) == "string" then
+    if path:find("/med/", 1, true) then
+      width, height = 256, 256
+    elseif path:find("/hard/", 1, true) then
+      width, height = 320, 320
+    end
+  end
   return {
-    getWidth      = function() return 192 end,
-    getHeight     = function() return 192 end,
-    getDimensions = function() return 192, 192 end,
+    getWidth      = function() return width end,
+    getHeight     = function() return height end,
+    getDimensions = function() return width, height end,
     setFilter     = noop,
   }
 end

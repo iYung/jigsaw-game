@@ -1,5 +1,6 @@
 local C            = require("game/constants")
 local JigsawPiece  = require("game/jigsaw_piece")
+local PuzzleCatalog = require("game/puzzle_catalog")
 
 -- constants ---------------------------------------------------------------
 
@@ -303,10 +304,28 @@ end
 -- JigsawBox ---------------------------------------------------------------
 local JigsawBox = require("game/jigsaw_box")
 
+-- Helper: constructs a JigsawBox guaranteed to resolve to a 3x3 (9-piece)
+-- grid, regardless of which images PuzzleCatalog.list() happens to contain or
+-- which one math.random selects, by forcing love.graphics.newImage to report
+-- an easy/ path for the duration of construction (the headless stub's
+-- path-aware make_stub_image then reports 192x192, so grid inference lands
+-- on 3x3/9 pieces). Used below by tests that exercise ejection timing/order/
+-- slot-search/slicing mechanics unrelated to catalog size, so they don't
+-- depend on which image math.random happens to pick.
+local function new_easy_box(...)
+    local real_newImage = love.graphics.newImage
+    love.graphics.newImage = function(path, ...)
+        return real_newImage("assets/puzzles/easy/1.png", ...)
+    end
+    local box = JigsawBox.new(...)
+    love.graphics.newImage = real_newImage
+    return box
+end
+
 -- JigsawBox.new -----------------------------------------------------------
 
 do
-    local box = JigsawBox.new(128, 128)
+    local box = new_easy_box(128, 128)
     assert(box.state == "waiting",       "new box should be in state 'waiting'")
     assert(#box.pieces_to_spawn == 9,    "new box should have 9 items in pieces_to_spawn (3x3 grid)")
     assert(box.rows == 3,         "box.rows should be inferred as 3 for a 192px-tall image, got " .. tostring(box.rows))
@@ -340,7 +359,7 @@ end
 -- update() x9 ejects all pieces, state becomes done ----------------------
 
 do
-    local box = JigsawBox.new(128, 128, 2000, 2000)
+    local box = new_easy_box(128, 128, 2000, 2000)
     local pieces = {}
     box:interact()
     for i = 1, 8 do
@@ -390,7 +409,7 @@ end
 -- background ejection is unaffected by the box's early disappearance ------
 
 do
-    local box = JigsawBox.new(128, 128, 2000, 2000)
+    local box = new_easy_box(128, 128, 2000, 2000)
     local pieces = {}
     box:interact()
     for i = 1, 9 do
@@ -407,7 +426,7 @@ end
 
 do
     local world_w, world_h = 4 * C.SLOT, 4 * C.SLOT
-    local box = JigsawBox.new(0, 0, world_w, world_h)
+    local box = new_easy_box(0, 0, world_w, world_h)
     local pieces = {}
     box:interact()
     for i = 1, 9 do
@@ -444,7 +463,7 @@ do
         return quad
     end
 
-    local box = JigsawBox.new(0, 0)
+    local box = new_easy_box(0, 0)
     love.graphics.newQuad = real_newQuad
 
     assert(#box.pieces_to_spawn == 9, "pieces_to_spawn should have 9 entries")
@@ -485,7 +504,7 @@ do
             cell_of[quad] = col .. "," .. row
             return quad
         end
-        local box = JigsawBox.new(0, 0)
+        local box = new_easy_box(0, 0)
         love.graphics.newQuad = real_newQuad
 
         local order = {}
@@ -544,17 +563,16 @@ do
     print("PASS: jigsaw_box: ejected piece's sprite carries non-nil image and quad (visual wiring)")
 end
 
--- JigsawBox.new randomly selects one of the 3 puzzle images ----------------
+-- JigsawBox.new randomly selects one of the catalog's puzzle images --------
 
 do
     -- Spy on love.graphics.newImage for the duration of several JigsawBox.new()
     -- calls, following the same spy-and-restore pattern used above for
     -- love.graphics.newQuad, to capture which path each construction loads.
-    local expected_paths = {
-        ["assets/puzzles/1.png"] = true,
-        ["assets/puzzles/2.png"] = true,
-        ["assets/puzzles/3.png"] = true,
-    }
+    local expected_paths = {}
+    for _, path in ipairs(PuzzleCatalog.list()) do
+        expected_paths[path] = true
+    end
 
     local real_newImage = love.graphics.newImage
     local captured_paths = {}
@@ -574,14 +592,14 @@ do
     for i, path in ipairs(captured_paths) do
         assert(expected_paths[path],
             "captured path #" .. i .. " (" .. tostring(path) ..
-            ") should be one of the 3 expected puzzle images")
+            ") should be one of the catalog's expected puzzle images")
     end
-    print("PASS: jigsaw_box: new() always loads one of the 3 expected puzzle images")
+    print("PASS: jigsaw_box: new() always loads one of the catalog's expected puzzle images")
 
     -- Probabilistic check that math.random selection actually produces
     -- variety across trials, not just a hardcoded single path -- same
     -- statistical approach as the shuffle-order and rotation_step variety
-    -- checks elsewhere in this file: with 3 equally likely options and 10
+    -- checks elsewhere in this file: with 5 equally likely options and 10
     -- trials, all trials landing on the same path is astronomically unlikely
     -- rather than impossible.
     local all_same = true
@@ -592,6 +610,97 @@ do
         "captured path was " .. tostring(captured_paths[1]) .. " in every one of " ..
         #captured_paths .. " trials -- expected some variety from the random image selection")
     print("PASS: jigsaw_box: new() picks varied puzzle images across multiple constructions (not always the same one)")
+end
+
+-- JigsawBox.new selects flat-uniformly across the whole catalog, not -------
+-- weighted by tier (today's catalog is 3 easy + 1 med + 1 hard == 5 images;
+-- a broken per-tier-then-per-image scheme would give the med and hard images
+-- each ~33% per trial instead of the correct flat ~20%) --------------------
+
+do
+    local real_newImage = love.graphics.newImage
+    local captured_paths = {}
+    love.graphics.newImage = function(path, ...)
+        captured_paths[#captured_paths + 1] = path
+        return real_newImage(path, ...)
+    end
+
+    for trial = 1, 300 do
+        JigsawBox.new(128, 128)
+    end
+
+    love.graphics.newImage = real_newImage
+
+    local hit = {}
+    for _, path in ipairs(captured_paths) do
+        hit[path] = true
+    end
+
+    for _, path in ipairs(PuzzleCatalog.list()) do
+        assert(hit[path],
+            "expected catalog path " .. path .. " to be picked at least once across " ..
+            #captured_paths .. " trials under flat-uniform selection (a per-tier-first " ..
+            "scheme would make this far less likely for the med/hard images)")
+    end
+    print("PASS: jigsaw_box: new() selects flat-uniformly across the whole catalog (all catalog images hit across 300 trials)")
+end
+
+-- grid inference for non-3x3 catalog images (med/hard) ---------------------
+-- Uses a bounded-retry loop (mirroring the bounded slot search in
+-- game/jigsaw_box.lua's _eject_next) to reliably land on a med/ image, since
+-- math.random selection alone can't guarantee which tier's image a single
+-- JigsawBox.new() call will pick.
+
+do
+    local real_newImage = love.graphics.newImage
+    local last_path = nil
+    love.graphics.newImage = function(path, ...)
+        last_path = path
+        return real_newImage(path, ...)
+    end
+
+    local box, found = nil, false
+    for _ = 1, 200 do
+        box = JigsawBox.new(0, 0)
+        if last_path:find("/med/", 1, true) then
+            found = true
+            break
+        end
+    end
+
+    love.graphics.newImage = real_newImage
+
+    assert(found, "expected at least one of 200 JigsawBox.new() trials to pick a med/ image")
+    assert(box.cols == 4, "box.cols should be inferred as 4 for a 256px-wide med image, got " .. tostring(box.cols))
+    assert(box.rows == 4, "box.rows should be inferred as 4 for a 256px-tall med image, got " .. tostring(box.rows))
+    assert(box.piece_count == 16, "box.piece_count should be rows*cols == 16, got " .. tostring(box.piece_count))
+    print("PASS: jigsaw_box: grid inference for a med/ (256x256) image yields cols=4, rows=4, piece_count=16")
+end
+
+do
+    local real_newImage = love.graphics.newImage
+    local last_path = nil
+    love.graphics.newImage = function(path, ...)
+        last_path = path
+        return real_newImage(path, ...)
+    end
+
+    local box, found = nil, false
+    for _ = 1, 200 do
+        box = JigsawBox.new(0, 0)
+        if last_path:find("/hard/", 1, true) then
+            found = true
+            break
+        end
+    end
+
+    love.graphics.newImage = real_newImage
+
+    assert(found, "expected at least one of 200 JigsawBox.new() trials to pick a hard/ image")
+    assert(box.cols == 5, "box.cols should be inferred as 5 for a 320px-wide hard image, got " .. tostring(box.cols))
+    assert(box.rows == 5, "box.rows should be inferred as 5 for a 320px-tall hard image, got " .. tostring(box.rows))
+    assert(box.piece_count == 25, "box.piece_count should be rows*cols == 25, got " .. tostring(box.piece_count))
+    print("PASS: jigsaw_box: grid inference for a hard/ (320x320) image yields cols=5, rows=5, piece_count=25")
 end
 
 -- Drawer:remove ------------------------------------------------------------
@@ -849,7 +958,7 @@ do
         return quad
     end
 
-    local box = JigsawBox.new(0, 0)
+    local box = new_easy_box(0, 0)
     love.graphics.newQuad = real_newQuad
 
     local seen = {}

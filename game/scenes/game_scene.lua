@@ -5,6 +5,7 @@ local C          = require("game/constants")
 local JigsawBox  = require("game/jigsaw_box")
 local JigsawSolver = require("game/jigsaw_solver")
 local SpawnButton = require("game/spawn_button")
+local GameState  = require("game/game_state")
 
 local GameScene = {}
 GameScene.__index = GameScene
@@ -50,7 +51,10 @@ function GameScene:on_enter()
     self.pieces_in_drawer = {}
     self.active_puzzles = {}
 
-    local box = JigsawBox.new(5 * C.SLOT, 3 * C.SLOT, self.world_w, self.world_h)
+    local box = nil
+    if GameState:can_start_puzzle() then
+        box = JigsawBox.new(5 * C.SLOT, 3 * C.SLOT, self.world_w, self.world_h)
+    end
     self.boxes = {}
     if box then
         self.boxes[#self.boxes + 1] = box
@@ -60,6 +64,7 @@ function GameScene:on_enter()
             piece_count = box.piece_count,
             solved = false,
         }
+        GameState:puzzle_started()
     end
 
     self.spawn_button = SpawnButton.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
@@ -67,6 +72,8 @@ function GameScene:on_enter()
 end
 
 function GameScene:_spawn_box()
+    if not GameState:can_start_puzzle() then return end
+
     local cols = self.world_w / C.SLOT
     local rows = self.world_h / C.SLOT
 
@@ -95,6 +102,7 @@ function GameScene:_spawn_box()
                 piece_count = box.piece_count,
                 solved = false,
             }
+            GameState:puzzle_started()
             return
         end
     end
@@ -125,6 +133,7 @@ function GameScene:update(dt)
     for _, entry in ipairs(self.active_puzzles) do
         if not entry.solved and JigsawSolver.is_assembled(entry.pieces, entry.piece_count) then
             entry.solved = true
+            GameState:puzzle_solved()
             for _, piece in ipairs(entry.pieces) do
                 piece:start_vanish()
             end

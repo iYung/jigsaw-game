@@ -1183,6 +1183,8 @@ do
     gs:update(1 / 60)
 
     assert(entry.solved == true, "active_puzzles entry.solved should be set true once the arrangement is detected")
+    assert(GameState.solved_count == 1,
+        "GameState.solved_count should increase by 1 the instant entry.solved flips to true, got " .. GameState.solved_count)
     for _, p in ipairs(spawned) do
         assert(p.state == "vanishing", "every piece should be in the 'vanishing' state after the solved check fires")
     end
@@ -1197,6 +1199,8 @@ do
     -- Drive enough more time for the fade to fully complete.
     gs:update(C.PIECE_FADE_DURATION)
 
+    assert(GameState.solved_count == 1,
+        "GameState.solved_count should not increase again on later fade-out frames, got " .. GameState.solved_count)
     assert(#gs.pieces == 0,
         "all pieces should be removed from gs.pieces once their fade completes, got " .. #gs.pieces)
     for _, p in ipairs(spawned) do
@@ -1275,6 +1279,8 @@ do
 
     assert(entry_a.solved == true, "puzzle A should solve independently of puzzle B's pieces being present")
     assert(entry_b.solved == false, "puzzle B should remain unsolved since it isn't correctly arranged")
+    assert(GameState.solved_count == 1,
+        "GameState.solved_count should increase by 1 the instant puzzle A's entry.solved flips to true, got " .. GameState.solved_count)
     for _, p in ipairs(spawned_a) do
         assert(p.state == "vanishing", "puzzle A's pieces should start vanishing once solved")
     end
@@ -1285,6 +1291,9 @@ do
     -- Drive time forward so puzzle A's pieces fully fade and its
     -- active_puzzles entry gets pruned -- puzzle B must be unaffected.
     gs:update(C.PIECE_FADE_DURATION)
+
+    assert(GameState.solved_count == 1,
+        "GameState.solved_count should not increase again while puzzle A's pieces are only fading, got " .. GameState.solved_count)
 
     local a_present = false
     for _, e in ipairs(gs.active_puzzles) do
@@ -1309,6 +1318,8 @@ do
 
     assert(entry_b.solved == true,
         "puzzle B should solve independently once correctly arranged, after puzzle A already vanished")
+    assert(GameState.solved_count == 2,
+        "GameState.solved_count should increase by 1 again the instant puzzle B's entry.solved flips to true, got " .. GameState.solved_count)
     for _, p in ipairs(spawned_b) do
         assert(p.state == "vanishing", "puzzle B's pieces should start vanishing once solved")
     end
@@ -1356,12 +1367,16 @@ do
     for _ = 1, 20 do
         gs:_spawn_box()
     end
-    -- With only 5 catalog images and the no-repeat contract, most of these
-    -- 20 attempts will silently no-op once the pool is exhausted (_spawn_box
-    -- guards on JigsawBox.new returning nil) -- this assertion only requires
-    -- at least one new box, which still holds.
+    -- on_enter() already created 1 box, so only 2 more of these 20 attempts
+    -- can succeed before GameState.MAX_ACTIVE_PUZZLES is hit -- once the cap
+    -- is reached, _spawn_box()'s "if not GameState:can_start_puzzle() then
+    -- return end" guard makes every remaining attempt a silent no-op
+    -- regardless of catalog state (5 images is more than enough headroom).
+    -- This assertion only requires at least one new box, which still holds.
     assert(#gs.boxes > boxes_before,
         "expected at least one new box to be added across 20 spawn attempts in a mostly-empty world")
+    assert(#gs.boxes <= GameState.MAX_ACTIVE_PUZZLES,
+        "number of boxes should never exceed GameState.MAX_ACTIVE_PUZZLES, got " .. #gs.boxes)
 
     local seen = {}
     for _, box in ipairs(gs.boxes) do
@@ -1382,6 +1397,77 @@ do
             "box position should not collide with the spawn button's position")
     end
     print("PASS: game_scene: _spawn_box() places boxes on grid-aligned, in-bounds, non-colliding cells")
+end
+
+-- GameScene:_spawn_box() / GameState -----------------------------------------
+-- enforces the 3-active-puzzle cap, and a solved puzzle frees a slot --------
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()  -- 1 active puzzle from the initial box
+
+    local attempts = 0
+    while #gs.boxes < GameState.MAX_ACTIVE_PUZZLES and attempts < 20 do
+        gs:_spawn_box()
+        attempts = attempts + 1
+    end
+
+    assert(#gs.boxes == GameState.MAX_ACTIVE_PUZZLES,
+        "expected to reach the cap of " .. GameState.MAX_ACTIVE_PUZZLES .. " boxes, got " .. #gs.boxes)
+    assert(GameState.active_count == GameState.MAX_ACTIVE_PUZZLES,
+        "active_count should equal the cap once " .. GameState.MAX_ACTIVE_PUZZLES .. " boxes are active, got " .. GameState.active_count)
+    assert(GameState:can_start_puzzle() == false,
+        "can_start_puzzle() should be false once active_count has reached the cap")
+
+    -- One more spawn attempt at the cap should be a silent no-op: no new
+    -- box, and GameState.active_count untouched.
+    local boxes_at_cap = #gs.boxes
+    local active_count_at_cap = GameState.active_count
+    gs:_spawn_box()
+    assert(#gs.boxes == boxes_at_cap,
+        "_spawn_box() at the cap should not add a new box, got " .. #gs.boxes)
+    assert(GameState.active_count == active_count_at_cap,
+        "_spawn_box() at the cap should not change active_count, got " .. GameState.active_count)
+
+    -- Simulate solving one of the active puzzles, using the same technique
+    -- as the "assembling the puzzle" integration test above: replace one
+    -- active_puzzles entry's pieces with a correctly-arranged, unrotated set
+    -- so JigsawSolver.is_assembled(entry.pieces, entry.piece_count) is true
+    -- as soon as gs:update()'s solved-check runs.
+    local entry = gs.active_puzzles[1]
+    local spawned = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local p = JigsawPiece.new(col * C.SLOT, {1, 1, 1, 1},
+                { image = {}, quad = {}, row = row, col = col })
+            p.sprite.y = row * C.SLOT
+            gs.pieces[#gs.pieces + 1] = p
+            spawned[#spawned + 1] = p
+            gs.drawer:add(p, C.PRIORITY_PIECE)
+            gs.pieces_in_drawer[p] = true
+        end
+    end
+    entry.pieces = spawned
+    entry.piece_count = 9
+
+    gs:update(1 / 60)
+
+    assert(GameState.active_count == GameState.MAX_ACTIVE_PUZZLES - 1,
+        "active_count should drop by 1 once a puzzle is detected solved, got " .. GameState.active_count)
+    assert(GameState.solved_count == 1,
+        "solved_count should increase by 1 once a puzzle is detected solved, got " .. GameState.solved_count)
+    assert(GameState:can_start_puzzle() == true,
+        "can_start_puzzle() should be true again once a slot has freed up")
+
+    -- A slot is now free, so the next spawn attempt should succeed.
+    local boxes_before_new = #gs.boxes
+    gs:_spawn_box()
+    assert(#gs.boxes == boxes_before_new + 1,
+        "a new box should be allowed in once a slot has freed up, got " .. #gs.boxes)
+    print("PASS: game_scene: enforces the 3-active-puzzle cap")
 end
 
 -- checkerboard floor -----------------------------------------------------

@@ -2,11 +2,29 @@ local Sprite = require("lua/core/sprite")
 local JigsawPiece = require("game/jigsaw_piece")
 local C = require("game/constants")
 local PuzzleCatalog = require("game/puzzle_catalog")
+local GameState = require("game/game_state")
 
 local JigsawBox = {}
 JigsawBox.__index = JigsawBox
 
 function JigsawBox.new(x, y, world_w, world_h)
+    local by_tier = PuzzleCatalog.list_by_tier()
+    local pool = {}
+    for tier, paths in pairs(by_tier) do
+        local unseen = GameState:unseen_paths(tier, paths)
+        for _, path in ipairs(unseen) do
+            pool[#pool + 1] = {path = path, tier = tier}
+        end
+    end
+
+    if #pool == 0 then
+        return nil
+    end
+
+    local chosen = pool[math.random(#pool)]
+    local path = chosen.path
+    GameState:mark_seen(chosen.tier, path)
+
     local self = setmetatable({}, JigsawBox)
     self.sprite = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.color = {1, 0.75, 0.2, 1}
@@ -15,8 +33,6 @@ function JigsawBox.new(x, y, world_w, world_h)
     self.world_w = world_w
     self.world_h = world_h
 
-    local list = PuzzleCatalog.list()
-    local path = list[math.random(#list)]
     local puzzle_image = love.graphics.newImage(path)
     local imgW, imgH = puzzle_image:getDimensions()
     local cols = imgW / C.SLOT

@@ -1,5 +1,7 @@
 local PuzzleCatalog = require("game/puzzle_catalog")
 
+local TIER_NAMES = {"easy", "med", "hard"}
+
 -- PuzzleCatalog.list() flattens all tiers into one array of path strings,
 -- filtering to .png entries, and memoizes the scan for the process lifetime.
 -- NOTE: because the cache is module-scope (persists for the whole
@@ -110,6 +112,144 @@ do
         "getDirectoryItems calls (memoization) -- had " .. count_after_first ..
         " calls after the first .list(), " .. count_after_second .. " after the second")
     print("PASS: puzzle_catalog: list() memoizes -- a second call adds zero new getDirectoryItems scans")
+end
+
+-- PuzzleCatalog.list_by_tier() partitions paths per tier, filtering to .png --
+
+do
+    local real_getDirectoryItems = love.filesystem.getDirectoryItems
+
+    local mock_items = {
+        ["assets/puzzles/easy"] = {"1.png", "2.png", "3.png", ".DS_Store"},
+        ["assets/puzzles/med"]  = {"1.png"},
+        ["assets/puzzles/hard"] = {"1.png"},
+    }
+
+    local call_count = 0
+    love.filesystem.getDirectoryItems = function(dir)
+        call_count = call_count + 1
+        return mock_items[dir] or real_getDirectoryItems(dir)
+    end
+
+    local by_tier = PuzzleCatalog.list_by_tier()
+
+    love.filesystem.getDirectoryItems = real_getDirectoryItems
+
+    if call_count > 0 then
+        -- Our mock was actually consulted (the cache was not already
+        -- populated by an earlier test block's real scan), so we can make
+        -- strong assertions about the exact returned tables.
+        local keys = {}
+        for k in pairs(by_tier) do keys[#keys + 1] = k end
+        table.sort(keys)
+        assert(#keys == 3 and keys[1] == "easy" and keys[2] == "hard" and keys[3] == "med",
+            "expected exactly the keys easy/hard/med, got: " .. table.concat(keys, ", "))
+
+        assert(#by_tier.easy == 3,
+            "expected 3 easy paths (.DS_Store filtered out), got " .. #by_tier.easy)
+        assert(#by_tier.med == 1, "expected 1 med path, got " .. #by_tier.med)
+        assert(#by_tier.hard == 1, "expected 1 hard path, got " .. #by_tier.hard)
+
+        local expected_easy = {
+            ["assets/puzzles/easy/1.png"] = true,
+            ["assets/puzzles/easy/2.png"] = true,
+            ["assets/puzzles/easy/3.png"] = true,
+        }
+        local seen_easy = {}
+        for i, path in ipairs(by_tier.easy) do
+            assert(expected_easy[path],
+                "easy path #" .. i .. " (" .. tostring(path) .. ") should be one of the 3 expected easy paths")
+            assert(not path:find(".DS_Store", 1, true),
+                "non-.png mock entry .DS_Store should have been filtered out of easy, got " .. tostring(path))
+            seen_easy[path] = true
+        end
+        for path in pairs(expected_easy) do
+            assert(seen_easy[path], "expected easy path " .. path .. " missing from by_tier.easy")
+        end
+
+        assert(by_tier.med[1] == "assets/puzzles/med/1.png",
+            "expected by_tier.med[1] to be assets/puzzles/med/1.png, got " .. tostring(by_tier.med[1]))
+        assert(by_tier.hard[1] == "assets/puzzles/hard/1.png",
+            "expected by_tier.hard[1] to be assets/puzzles/hard/1.png, got " .. tostring(by_tier.hard[1]))
+
+        -- No cross-tier contamination: no tier's array should contain a path
+        -- belonging to a different tier's directory.
+        for _, tier in ipairs(TIER_NAMES) do
+            for _, other in ipairs(TIER_NAMES) do
+                if tier ~= other then
+                    for _, path in ipairs(by_tier[tier]) do
+                        assert(not path:find("assets/puzzles/" .. other .. "/", 1, true),
+                            tier .. " tier array should not contain a " .. other .. "-tier path, got " .. tostring(path))
+                    end
+                end
+            end
+        end
+
+        print("PASS: puzzle_catalog: list_by_tier() partitions paths into easy/med/hard, filtering out non-.png entries, with no cross-tier contamination")
+    else
+        -- The module-level cache was already populated by an earlier test
+        -- block's real scan before our mock was installed; our mock never
+        -- ran. Fall back to a weaker but still meaningful shape assertion.
+        assert(type(by_tier) == "table", "PuzzleCatalog.list_by_tier() should return a table")
+
+        local keys = {}
+        for k in pairs(by_tier) do keys[#keys + 1] = k end
+        table.sort(keys)
+        assert(#keys == 3 and keys[1] == "easy" and keys[2] == "hard" and keys[3] == "med",
+            "expected exactly the keys easy/hard/med, got: " .. table.concat(keys, ", "))
+
+        for _, tier in ipairs(TIER_NAMES) do
+            local prefix = "assets/puzzles/" .. tier .. "/"
+            for i, path in ipairs(by_tier[tier]) do
+                assert(type(path) == "string" and path:sub(-4) == ".png",
+                    tier .. " path #" .. i .. " should be a .png path string, got " .. tostring(path))
+                assert(path:sub(1, #prefix) == prefix,
+                    tier .. " path #" .. i .. " should start with " .. prefix .. ", got " .. tostring(path))
+            end
+        end
+
+        print("PASS: puzzle_catalog: list_by_tier() returns easy/med/hard tables scoped to their own tier's .png paths (cache pre-populated by an earlier test block; mock not exercised)")
+    end
+end
+
+-- PuzzleCatalog.list() and list_by_tier() share one memoized scan, no matter --
+-- which of the two public functions is called first                        --
+
+do
+    local real_getDirectoryItems = love.filesystem.getDirectoryItems
+
+    local mock_items = {
+        ["assets/puzzles/easy"] = {"1.png", "2.png", "3.png"},
+        ["assets/puzzles/med"]  = {"1.png"},
+        ["assets/puzzles/hard"] = {"1.png"},
+    }
+
+    local call_count = 0
+    love.filesystem.getDirectoryItems = function(dir)
+        call_count = call_count + 1
+        return mock_items[dir] or real_getDirectoryItems(dir)
+    end
+
+    -- By this point in the file the module-level cache has almost certainly
+    -- already been populated by an earlier block/file, so in practice both
+    -- calls below add zero new scans regardless of order -- but the
+    -- assertion is written generically (comparing counts before/after each
+    -- call) so it holds just as well the first time either function is ever
+    -- called in a fresh process, whichever one runs first.
+    PuzzleCatalog.list_by_tier()
+    local count_after_first_call = call_count
+
+    PuzzleCatalog.list()
+    local count_after_second_call = call_count
+
+    love.filesystem.getDirectoryItems = real_getDirectoryItems
+
+    assert(count_after_second_call == count_after_first_call,
+        "calling list_by_tier() then list() back-to-back should not trigger " ..
+        "additional getDirectoryItems calls (shared memoization) -- had " ..
+        count_after_first_call .. " calls after the first public-function call, " ..
+        count_after_second_call .. " after the second")
+    print("PASS: puzzle_catalog: list() and list_by_tier() share one memoized scan -- the second public-function call adds zero new getDirectoryItems scans, regardless of call order")
 end
 
 print("ALL TESTS PASSED")

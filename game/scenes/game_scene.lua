@@ -50,13 +50,17 @@ function GameScene:on_enter()
     self.pieces_in_drawer = {}
     self.active_puzzles = {}
 
-    self.boxes = { JigsawBox.new(5 * C.SLOT, 3 * C.SLOT, self.world_w, self.world_h) }
-    self.drawer:add(self.boxes[1], C.PRIORITY_PIECE)
-    self.active_puzzles[#self.active_puzzles + 1] = {
-        pieces = self.boxes[1].spawned,
-        piece_count = self.boxes[1].piece_count,
-        solved = false,
-    }
+    local box = JigsawBox.new(5 * C.SLOT, 3 * C.SLOT, self.world_w, self.world_h)
+    self.boxes = {}
+    if box then
+        self.boxes[#self.boxes + 1] = box
+        self.drawer:add(box, C.PRIORITY_PIECE)
+        self.active_puzzles[#self.active_puzzles + 1] = {
+            pieces = box.spawned,
+            piece_count = box.piece_count,
+            solved = false,
+        }
+    end
 
     self.spawn_button = SpawnButton.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
     self.drawer:add(self.spawn_button, C.PRIORITY_PIECE)
@@ -83,6 +87,7 @@ function GameScene:_spawn_box()
 
         if not occupied then
             local box = JigsawBox.new(cx, cy, self.world_w, self.world_h)
+            if not box then return end
             self.boxes[#self.boxes + 1] = box
             self.drawer:add(box, C.PRIORITY_PIECE)
             self.active_puzzles[#self.active_puzzles + 1] = {

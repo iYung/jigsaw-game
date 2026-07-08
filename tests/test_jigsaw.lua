@@ -1,6 +1,7 @@
 local C            = require("game/constants")
 local JigsawPiece  = require("game/jigsaw_piece")
 local PuzzleCatalog = require("game/puzzle_catalog")
+local GameState = require("game/game_state")
 
 -- constants ---------------------------------------------------------------
 
@@ -325,6 +326,7 @@ end
 -- JigsawBox.new -----------------------------------------------------------
 
 do
+    GameState:reset()
     local box = new_easy_box(128, 128)
     assert(box.state == "waiting",       "new box should be in state 'waiting'")
     assert(#box.pieces_to_spawn == 9,    "new box should have 9 items in pieces_to_spawn (3x3 grid)")
@@ -337,6 +339,7 @@ end
 -- interact() --------------------------------------------------------------
 
 do
+    GameState:reset()
     local box = JigsawBox.new(128, 128)
     box:interact()
     assert(box.state == "ejecting", "state should be 'ejecting' after interact()")
@@ -347,6 +350,7 @@ end
 -- update() ejects one piece per call -------------------------------------
 
 do
+    GameState:reset()
     local box = JigsawBox.new(128, 128, 2000, 2000)
     local pieces = {}
     box:interact()
@@ -359,6 +363,7 @@ end
 -- update() x9 ejects all pieces, state becomes done ----------------------
 
 do
+    GameState:reset()
     local box = new_easy_box(128, 128, 2000, 2000)
     local pieces = {}
     box:interact()
@@ -376,6 +381,7 @@ end
 -- slot search skips occupied slots ----------------------------------------
 
 do
+    GameState:reset()
     local box = JigsawBox.new(128, 192, 2000, 2000)
     local bx = box.sprite.x  -- 128
     local by = box.sprite.y  -- 192
@@ -398,6 +404,7 @@ end
 -- interact() hides the box sprite immediately ------------------------------
 
 do
+    GameState:reset()
     local box = JigsawBox.new(128, 128, 2000, 2000)
     assert(box.sprite.visible == true, "box sprite should be visible before interact()")
     box:interact()
@@ -409,6 +416,7 @@ end
 -- background ejection is unaffected by the box's early disappearance ------
 
 do
+    GameState:reset()
     local box = new_easy_box(128, 128, 2000, 2000)
     local pieces = {}
     box:interact()
@@ -425,6 +433,7 @@ end
 -- _eject_next respects world bounds near an edge ---------------------------
 
 do
+    GameState:reset()
     local world_w, world_h = 4 * C.SLOT, 4 * C.SLOT
     local box = new_easy_box(0, 0, world_w, world_h)
     local pieces = {}
@@ -463,6 +472,7 @@ do
         return quad
     end
 
+    GameState:reset()
     local box = new_easy_box(0, 0)
     love.graphics.newQuad = real_newQuad
 
@@ -496,6 +506,13 @@ do
     local unshuffled_order = "0,0|1,0|2,0|0,1|1,1|2,1|0,2|1,2|2,2"
     local orders = {}
     for trial = 1, 8 do
+        -- Reset before every trial (not just once before the loop): each
+        -- trial performs a real JigsawBox.new() construction that consumes
+        -- one entry from the unseen pool, and the on-disk catalog only has
+        -- 5 images total, so without a per-trial reset the pool would be
+        -- exhausted well before all 8 trials complete and JigsawBox.new
+        -- would start returning nil.
+        GameState:reset()
         local cell_of = {}
         love.graphics.newQuad = function(qx, qy, qw, qh, imgW, imgH)
             local quad = real_newQuad(qx, qy, qw, qh, imgW, imgH)
@@ -529,6 +546,11 @@ end
 do
     local rotation_steps = {}
     for trial = 1, 12 do
+        -- Reset before every trial: this test only cares about sampling
+        -- rotation variety, not image selection, and the on-disk catalog
+        -- has just 5 images, so a full pool must be guaranteed for all 12
+        -- trials or JigsawBox.new would return nil partway through.
+        GameState:reset()
         local box = JigsawBox.new(128, 128, 2000, 2000)
         box:interact()
         local pieces = {}
@@ -553,6 +575,7 @@ end
 -- ejected piece carries non-nil image + quad (visual wiring) --------------
 
 do
+    GameState:reset()
     local box = JigsawBox.new(128, 128, 2000, 2000)
     box:interact()
     local pieces = {}
@@ -574,6 +597,13 @@ do
         expected_paths[path] = true
     end
 
+    -- Under the no-repeat contract, a full unseen-pool cycle can only
+    -- produce #PuzzleCatalog.list() distinct successful constructions
+    -- (currently 5) before JigsawBox.new starts returning nil, so the trial
+    -- count is derived from the catalog size rather than a fixed literal.
+    GameState:reset()
+    local trial_count = #PuzzleCatalog.list()
+
     local real_newImage = love.graphics.newImage
     local captured_paths = {}
     love.graphics.newImage = function(path, ...)
@@ -581,14 +611,14 @@ do
         return real_newImage(path, ...)
     end
 
-    for trial = 1, 10 do
+    for trial = 1, trial_count do
         JigsawBox.new(128, 128)
     end
 
     love.graphics.newImage = real_newImage
 
-    assert(#captured_paths == 10,
-        "expected 10 captured love.graphics.newImage calls, got " .. #captured_paths)
+    assert(#captured_paths == trial_count,
+        "expected " .. trial_count .. " captured love.graphics.newImage calls, got " .. #captured_paths)
     for i, path in ipairs(captured_paths) do
         assert(expected_paths[path],
             "captured path #" .. i .. " (" .. tostring(path) ..
@@ -596,20 +626,25 @@ do
     end
     print("PASS: jigsaw_box: new() always loads one of the catalog's expected puzzle images")
 
-    -- Probabilistic check that math.random selection actually produces
-    -- variety across trials, not just a hardcoded single path -- same
-    -- statistical approach as the shuffle-order and rotation_step variety
-    -- checks elsewhere in this file: with 5 equally likely options and 10
-    -- trials, all trials landing on the same path is astronomically unlikely
-    -- rather than impossible.
-    local all_same = true
-    for i = 2, #captured_paths do
-        if captured_paths[i] ~= captured_paths[1] then all_same = false break end
+    -- No-repeat check: under the new seen-tracking contract, duplicates
+    -- across a single unseen-pool cycle are structurally impossible (not
+    -- just statistically unlikely), so this replaces the old "variety
+    -- across trials" probabilistic check.
+    local seen_paths = {}
+    for i, path in ipairs(captured_paths) do
+        assert(not seen_paths[path],
+            "path " .. tostring(path) .. " (captured trial #" .. i .. ") repeated across trials -- " ..
+            "the no-repeat contract requires each unseen path to be picked at most once per cycle")
+        seen_paths[path] = true
     end
-    assert(not all_same,
-        "captured path was " .. tostring(captured_paths[1]) .. " in every one of " ..
-        #captured_paths .. " trials -- expected some variety from the random image selection")
-    print("PASS: jigsaw_box: new() picks varied puzzle images across multiple constructions (not always the same one)")
+    print("PASS: jigsaw_box: new() never repeats a puzzle image within a single unseen-pool cycle")
+
+    -- Pool is now fully exhausted (every catalog path has been seen): the
+    -- next construction attempt must signal exhaustion by returning nil.
+    local exhausted_box = JigsawBox.new(128, 128)
+    assert(exhausted_box == nil,
+        "JigsawBox.new() should return nil once every catalog image has been seen")
+    print("PASS: jigsaw_box: new() returns nil once the unseen pool across all tiers is exhausted")
 end
 
 -- JigsawBox.new selects flat-uniformly across the whole catalog, not -------
@@ -618,6 +653,16 @@ end
 -- each ~33% per trial instead of the correct flat ~20%) --------------------
 
 do
+    -- Under the no-repeat contract, both a per-tier-proportional scheme and
+    -- a naive per-tier-first scheme reach full catalog coverage once repeats
+    -- are disallowed, so a pure "was every image hit" coverage check can no
+    -- longer distinguish flat-uniform weighting from per-tier weighting on
+    -- its own. This test now primarily guards the no-repeat/exhaustion-
+    -- after-N-calls contract: exactly #PuzzleCatalog.list() constructions
+    -- succeed, each catalog path appears exactly once, and the call after
+    -- that returns nil.
+    GameState:reset()
+
     local real_newImage = love.graphics.newImage
     local captured_paths = {}
     love.graphics.newImage = function(path, ...)
@@ -625,24 +670,27 @@ do
         return real_newImage(path, ...)
     end
 
-    for trial = 1, 300 do
-        JigsawBox.new(128, 128)
-    end
+    repeat
+        local box = JigsawBox.new(128, 128)
+    until box == nil
 
     love.graphics.newImage = real_newImage
 
-    local hit = {}
-    for _, path in ipairs(captured_paths) do
-        hit[path] = true
-    end
+    local catalog_paths = PuzzleCatalog.list()
+    assert(#captured_paths == #catalog_paths,
+        "expected number of successful constructions to equal catalog size (" ..
+        #catalog_paths .. "), got " .. #captured_paths)
 
-    for _, path in ipairs(PuzzleCatalog.list()) do
-        assert(hit[path],
-            "expected catalog path " .. path .. " to be picked at least once across " ..
-            #captured_paths .. " trials under flat-uniform selection (a per-tier-first " ..
-            "scheme would make this far less likely for the med/hard images)")
+    local count_of = {}
+    for _, path in ipairs(captured_paths) do
+        count_of[path] = (count_of[path] or 0) + 1
     end
-    print("PASS: jigsaw_box: new() selects flat-uniformly across the whole catalog (all catalog images hit across 300 trials)")
+    for _, path in ipairs(catalog_paths) do
+        assert(count_of[path] == 1,
+            "expected catalog path " .. path .. " to appear exactly once across captured paths, got " ..
+            tostring(count_of[path] or 0))
+    end
+    print("PASS: jigsaw_box: new() covers the whole catalog exactly once each, then returns nil (no-repeat/exhaustion contract)")
 end
 
 -- grid inference for non-3x3 catalog images (med/hard) ---------------------
@@ -652,6 +700,7 @@ end
 -- JigsawBox.new() call will pick.
 
 do
+    GameState:reset()
     local real_newImage = love.graphics.newImage
     local last_path = nil
     love.graphics.newImage = function(path, ...)
@@ -662,6 +711,7 @@ do
     local box, found = nil, false
     for _ = 1, 200 do
         box = JigsawBox.new(0, 0)
+        if not box then break end
         if last_path:find("/med/", 1, true) then
             found = true
             break
@@ -678,6 +728,7 @@ do
 end
 
 do
+    GameState:reset()
     local real_newImage = love.graphics.newImage
     local last_path = nil
     love.graphics.newImage = function(path, ...)
@@ -688,6 +739,7 @@ do
     local box, found = nil, false
     for _ = 1, 200 do
         box = JigsawBox.new(0, 0)
+        if not box then break end
         if last_path:find("/hard/", 1, true) then
             found = true
             break
@@ -958,6 +1010,7 @@ do
         return quad
     end
 
+    GameState:reset()
     local box = new_easy_box(0, 0)
     love.graphics.newQuad = real_newQuad
 
@@ -1092,6 +1145,7 @@ end
 -- from both gs.pieces and the Drawer once their fade completes (GameScene) -
 
 do
+    GameState:reset()
     local GameScene = require("game/scenes/game_scene")
 
     local gs = GameScene.new()
@@ -1167,6 +1221,7 @@ end
 -- tracking exists for -- see docs/design/infer-puzzle-size.md) -------------
 
 do
+    GameState:reset()
     local GameScene = require("game/scenes/game_scene")
 
     local gs = GameScene.new()
@@ -1291,6 +1346,7 @@ end
 -- picks grid-aligned, in-bounds, non-colliding cells for new boxes -----------
 
 do
+    GameState:reset()
     local GameScene = require("game/scenes/game_scene")
 
     local gs = GameScene.new()
@@ -1300,6 +1356,10 @@ do
     for _ = 1, 20 do
         gs:_spawn_box()
     end
+    -- With only 5 catalog images and the no-repeat contract, most of these
+    -- 20 attempts will silently no-op once the pool is exhausted (_spawn_box
+    -- guards on JigsawBox.new returning nil) -- this assertion only requires
+    -- at least one new box, which still holds.
     assert(#gs.boxes > boxes_before,
         "expected at least one new box to be added across 20 spawn attempts in a mostly-empty world")
 
@@ -1330,6 +1390,7 @@ end
 -- (docs/design/checkerboard-floor.md, docs/checklists/checkerboard-floor.md)
 
 do
+    GameState:reset()
     local GameScene = require("game/scenes/game_scene")
 
     local gs = GameScene.new()
@@ -1367,6 +1428,7 @@ do
     player.input = HeadlessInput.new()
     -- player:centre() == (32, 32)
 
+    GameState:reset()
     -- All three boxes' centres sit within 1.5*C.U (48px) of the player's
     -- centre, with boxNear strictly the closest of the three.
     local boxNear = JigsawBoxMod.new(0, 0)    -- centre (32, 32), dist 0
@@ -1425,6 +1487,7 @@ do
 
     local presses = 0
     local button = SpawnButtonMod.new(0, 0, function() presses = presses + 1 end)  -- centre (32, 32)
+    GameState:reset()
     local box    = JigsawBoxMod.new(0, 0)                                          -- centre (32, 32)
 
     player.input:press("interact")

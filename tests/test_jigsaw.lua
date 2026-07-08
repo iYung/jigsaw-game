@@ -41,6 +41,20 @@ do
     print("PASS: jigsaw_piece: centre() returns sprite center")
 end
 
+-- Player.new() sprite size matches a puzzle piece's footprint (C.SLOT x C.SLOT)
+
+do
+    local Player = require("game/player")
+    local player = Player.new(100, 50)
+    assert(player.sprite.width  == C.SLOT, "player sprite width should be SLOT (" .. C.SLOT .. "), got " .. tostring(player.sprite.width))
+    assert(player.sprite.height == C.SLOT, "player sprite height should be SLOT (" .. C.SLOT .. "), got " .. tostring(player.sprite.height))
+
+    local c = player:centre()
+    assert(c.x == 100 + C.SLOT / 2, "player centre.x should be sprite.x + SLOT/2, got " .. tostring(c.x))
+    assert(c.y == 50  + C.SLOT / 2, "player centre.y should be sprite.y + SLOT/2, got " .. tostring(c.y))
+    print("PASS: player: Player.new() sprite is sized to match a puzzle piece (SLOT x SLOT)")
+end
+
 -- rotate() ----------------------------------------------------------------
 
 do
@@ -95,14 +109,14 @@ do
     local mock_player = {
         sprite = { x = 300, y = 170 },
         centre = function(self)
-            return { x = self.sprite.x + 16, y = self.sprite.y + 24 }
+            return { x = self.sprite.x + 32, y = self.sprite.y + 32 }
         end,
     }
     local p = JigsawPiece.new(0, {1, 0, 0, 1})
     p:pick_up()
     p:update(mock_player)
 
-    local expected_x = mock_player:centre().x - C.U   -- 316 - 32 = 284
+    local expected_x = mock_player:centre().x - C.U   -- 332 - 32 = 300
     local expected_y = mock_player.sprite.y - 2 * C.U -- 170 - 64 = 106
     assert(p.sprite.x == expected_x,
         "held piece x should be " .. expected_x .. ", got " .. tostring(p.sprite.x))
@@ -117,7 +131,7 @@ do
     local mock_player = {
         sprite = { x = 300, y = 170 },
         centre = function(self)
-            return { x = self.sprite.x + 16, y = self.sprite.y + 24 }
+            return { x = self.sprite.x + 32, y = self.sprite.y + 32 }
         end,
     }
     local p = JigsawPiece.new(200, {1, 0, 0, 1})
@@ -183,10 +197,10 @@ do
     player.input = HeadlessInput.new()
     player.held_piece = pieceB
 
-    -- centre().x - U == sprite.x - 16; set sprite.x so target_x == 384.
-    -- centre().y - U == sprite.y -  8; set sprite.y so target_y == 192.
-    player.sprite.x = 400
-    player.sprite.y = 200
+    -- centre().x - U == sprite.x (the +32 centre offset cancels the -32 U
+    -- offset); set sprite.x so target_x == 384. Same for y and target_y == 192.
+    player.sprite.x = 384
+    player.sprite.y = 192
 
     local pieces = { pieceA, pieceB }
     player.input:press("interact")
@@ -202,9 +216,11 @@ end
 
 do
     -- Player position already grid-aligned: the raw target itself lands on a
-    -- SLOT multiple, so snap_x/snap_y should equal x/y exactly.
+    -- SLOT multiple, so snap_x/snap_y should equal x/y exactly. (Note: with
+    -- the 64x64 sprite, centre()'s +32 offset exactly cancels drop_target()'s
+    -- -C.U (-32) offset, so target x/y now equal the sprite position itself.)
     local Player = require("game/player")
-    local player = Player.new(144, 200)
+    local player = Player.new(128, 192)
     local dt = player:drop_target()
     assert(dt.x == 128, "drop_target().x should be 128, got " .. tostring(dt.x))
     assert(dt.y == 192, "drop_target().y should be 192, got " .. tostring(dt.y))
@@ -215,13 +231,15 @@ end
 
 do
     -- Player position not grid-aligned: snap_x/snap_y should floor to the
-    -- nearest C.SLOT multiple, distinct from the raw target x/y.
+    -- nearest C.SLOT multiple, distinct from the raw target x/y. (centre()'s
+    -- +32 offset cancels drop_target()'s -32 U offset, so target x/y equal
+    -- the sprite position itself: 300, 170.)
     local Player = require("game/player")
     local player = Player.new(300, 170)
     local dt = player:drop_target()
-    assert(dt.x == 284, "drop_target().x should be 284, got " .. tostring(dt.x))
-    assert(dt.y == 162, "drop_target().y should be 162, got " .. tostring(dt.y))
-    assert(dt.snap_x == 256, "drop_target().snap_x should snap to 256 (4*SLOT), got " .. tostring(dt.snap_x))
+    assert(dt.x == 300, "drop_target().x should be 300, got " .. tostring(dt.x))
+    assert(dt.y == 170, "drop_target().y should be 170, got " .. tostring(dt.y))
+    assert(dt.snap_x == 320, "drop_target().snap_x should snap to 320 (5*SLOT), got " .. tostring(dt.snap_x))
     assert(dt.snap_y == 192, "drop_target().snap_y should snap to 192 (3*SLOT), got " .. tostring(dt.snap_y))
     print("PASS: player: drop_target() floors an unaligned position to the nearest SLOT multiple")
 end
@@ -638,7 +656,7 @@ do
 
     -- Player centre (32, 224) exactly matches the piece's centre, well
     -- within the 1.5*U pick-up range.
-    local player = Player.new(16, 200)
+    local player = Player.new(0, 192)
     player.input = HeadlessInput.new()
 
     player.input:press("interact")
@@ -1238,13 +1256,13 @@ do
 
     local player = Player.new(0, 0)
     player.input = HeadlessInput.new()
-    -- player:centre() == (16, 24)
+    -- player:centre() == (32, 32)
 
     -- All three boxes' centres sit within 1.5*C.U (48px) of the player's
     -- centre, with boxNear strictly the closest of the three.
-    local boxNear = JigsawBoxMod.new(0, 0)    -- centre (32, 32), dist ~17.9
-    local boxMid  = JigsawBoxMod.new(16, 16)  -- centre (48, 48), dist 40
-    local boxFar  = JigsawBoxMod.new(0, 32)   -- centre (32, 64), dist ~43.1
+    local boxNear = JigsawBoxMod.new(0, 0)    -- centre (32, 32), dist 0
+    local boxMid  = JigsawBoxMod.new(16, 16)  -- centre (48, 48), dist ~22.6
+    local boxFar  = JigsawBoxMod.new(0, 32)   -- centre (32, 64), dist 32
 
     -- Deliberately not in nearest-first array order, to prove the scan
     -- actually compares distances rather than just picking boxes[1].
@@ -1269,11 +1287,11 @@ do
 
     local player = Player.new(0, 0)
     player.input = HeadlessInput.new()
-    -- player:centre() == (16, 24)
+    -- player:centre() == (32, 32)
 
     local presses = 0
     local button = SpawnButtonMod.new(0, 0, function() presses = presses + 1 end)
-    -- button:centre() == (32, 32), dist ~17.9, well within 1.5*C.U
+    -- button:centre() == (32, 32), dist 0, well within 1.5*C.U
 
     player.input:press("interact")
     player:update(1 / 60, {}, {}, button, nil)
@@ -1294,7 +1312,7 @@ do
 
     local player = Player.new(0, 0)
     player.input = HeadlessInput.new()
-    -- player:centre() == (16, 24)
+    -- player:centre() == (32, 32)
 
     local presses = 0
     local button = SpawnButtonMod.new(0, 0, function() presses = presses + 1 end)  -- centre (32, 32)

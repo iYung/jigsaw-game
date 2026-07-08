@@ -22,7 +22,7 @@ game/           Game-specific code
   jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap; optional image+quad visual; fade-out "vanishing" state on solve; draw_ghost() faint drop-location preview)
   jigsaw_solver.lua Puzzle-completion check (is_assembled(pieces, expected_count)) — true when exactly expected_count pieces are all unrotated and in correct relative arrangement, regardless of absolute world position; checked per-box (GameScene:active_puzzles) so differently-sized/simultaneous puzzles solve independently
   spawn_button.lua SpawnButton entity — grid-aligned world object; interact() fires an on_press callback (used by GameScene to spawn a new JigsawBox at a random grid position)
-  player.lua      Player movement and piece interaction
+  player.lua      Player movement and piece interaction (64x64 sprite, matches piece/grid size)
   scenes/         GameScene
 lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite (optional quad sub-rectangle drawing), etc.
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)

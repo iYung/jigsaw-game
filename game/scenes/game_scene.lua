@@ -24,7 +24,7 @@ function GameScene:on_enter()
 
     local GROUND_Y = 4 * C.SLOT  -- 256, grid-aligned so pieces rest at 3*SLOT=192
 
-    self.player = Player.new(0, GROUND_Y - 48)
+    self.player = Player.new(0, GROUND_Y - C.SLOT)
     self.drawer:add(self.player, 10)
 
     self.floor = {
@@ -154,8 +154,8 @@ function GameScene:update(dt)
         end
     end
 
-    self.player.sprite.x = math.max(0, math.min(self.player.sprite.x, self.world_w - 32))
-    self.player.sprite.y = math.max(0, math.min(self.player.sprite.y, self.world_h - 48))
+    self.player.sprite.x = math.max(0, math.min(self.player.sprite.x, self.world_w - C.SLOT))
+    self.player.sprite.y = math.max(0, math.min(self.player.sprite.y, self.world_h - C.SLOT))
 
     self.camera:follow(self.player:centre(), 0.85)
 end

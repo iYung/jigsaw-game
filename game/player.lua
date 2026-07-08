@@ -9,7 +9,7 @@ Player.__index = Player
 
 function Player.new(x, y)
     local self        = setmetatable({}, Player)
-    self.sprite       = Sprite.new(x, y, 32, 48)
+    self.sprite       = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.image = love.graphics.newImage("assets/player.png")
     self.input        = Input.new({
         up           = { "w", "up" },
@@ -128,7 +128,7 @@ end
 
 -- Centre point used for camera tracking
 function Player:centre()
-    return { x = self.sprite.x + 16, y = self.sprite.y + 24 }
+    return { x = self.sprite.x + self.sprite.width / 2, y = self.sprite.y + self.sprite.height / 2 }
 end
 
 -- Where a held piece would land (grid-snapped) if dropped right now

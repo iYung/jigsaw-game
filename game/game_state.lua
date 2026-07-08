@@ -5,9 +5,14 @@
 local GameState = {}
 GameState.__index = GameState
 
+-- Cap on simultaneously active puzzles in the world; see can_start_puzzle.
+GameState.MAX_ACTIVE_PUZZLES = 3
+
 function GameState.new()
     local self = setmetatable({}, GameState)
     self.seen = {easy = {}, med = {}, hard = {}}
+    self.solved_count = 0
+    self.active_count = 0
     return self
 end
 
@@ -40,11 +45,31 @@ function GameState:is_tier_exhausted(tier, all_paths_for_tier)
     return #self:unseen_paths(tier, all_paths_for_tier) == 0
 end
 
+-- Called once per box spawned into the world (opened or not); caller is
+-- responsible for calling this exactly once per spawn.
+function GameState:puzzle_started()
+    self.active_count = self.active_count + 1
+end
+
+-- Called exactly once per puzzle, the instant its arrangement is first
+-- detected as correct (not when its pieces finish fading).
+function GameState:puzzle_solved()
+    self.solved_count = self.solved_count + 1
+    self.active_count = self.active_count - 1
+end
+
+-- Returns true iff another puzzle can be started without exceeding the cap.
+function GameState:can_start_puzzle()
+    return self.active_count < GameState.MAX_ACTIVE_PUZZLES
+end
+
 -- Clears all seen-state back to empty. Nothing in game-runtime code calls
 -- this; it exists purely so tests can isolate scenarios that would
 -- otherwise share this process-lifetime instance.
 function GameState:reset()
     self.seen = {easy = {}, med = {}, hard = {}}
+    self.solved_count = 0
+    self.active_count = 0
 end
 
 -- Module returns a singleton instance (not the class table) so existing

@@ -336,6 +336,15 @@ do
     print("PASS: jigsaw_box: new() creates box in state 'waiting' with 9 pieces queued")
 end
 
+-- JigsawBox.new stores the loaded puzzle image ----------------------------
+
+do
+    GameState:reset()
+    local box = new_easy_box(128, 128)
+    assert(box.image ~= nil, "box.image should be set to the loaded puzzle image after JigsawBox.new()")
+    print("PASS: jigsaw_box: new() stores the loaded puzzle image on self.image")
+end
+
 -- interact() --------------------------------------------------------------
 
 do
@@ -1324,6 +1333,145 @@ do
         assert(p.state == "vanishing", "puzzle B's pieces should start vanishing once solved")
     end
     print("PASS: game_scene: two differently-sized puzzles solve and vanish independently via active_puzzles")
+end
+
+-- integration: active_puzzles entries carry image/cols/rows from the box ---
+-- that spawned them (on_enter() and _spawn_box() both build these entries) -
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    assert(#gs.boxes == 1, "on_enter() should spawn one box when under the active-puzzle cap")
+    local box = gs.boxes[1]
+    local entry = gs.active_puzzles[1]
+    assert(entry ~= nil, "on_enter() should record an active_puzzles entry for the spawned box")
+    assert(entry.image ~= nil, "active_puzzles entry.image should be non-nil")
+    assert(entry.image == box.image, "active_puzzles entry.image should match the spawned box's image")
+    assert(entry.cols == box.cols,
+        "active_puzzles entry.cols should match box.cols, got " .. tostring(entry.cols) .. " vs " .. tostring(box.cols))
+    assert(entry.rows == box.rows,
+        "active_puzzles entry.rows should match box.rows, got " .. tostring(entry.rows) .. " vs " .. tostring(box.rows))
+
+    -- _spawn_box() builds its active_puzzles entry the same way -- confirm
+    -- a second, manually-triggered spawn also carries image/cols/rows.
+    gs:_spawn_box()
+    local entry2 = gs.active_puzzles[2]
+    if entry2 then
+        local box2 = gs.boxes[2]
+        assert(entry2.image ~= nil, "_spawn_box()'s active_puzzles entry.image should be non-nil")
+        assert(entry2.image == box2.image, "_spawn_box()'s active_puzzles entry.image should match its box's image")
+        assert(entry2.cols == box2.cols, "_spawn_box()'s active_puzzles entry.cols should match its box's cols")
+        assert(entry2.rows == box2.rows, "_spawn_box()'s active_puzzles entry.rows should match its box's rows")
+    end
+    print("PASS: game_scene: active_puzzles entries from on_enter() and _spawn_box() carry image/cols/rows matching their box")
+end
+
+-- integration: a fully-faded solved puzzle is shelved onto completed_puzzles
+-- at the deterministic left-to-right slot position (trophy shelf) ----------
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    -- Bypass the real box/spawn path, same technique as the earlier
+    -- "assembling the puzzle" integration tests, but this time seed the
+    -- active_puzzles entry with image/cols/rows so the shelving logic in
+    -- update()'s fade-prune loop has something to work with.
+    gs.pieces = {}
+    gs.pieces_in_drawer = {}
+    gs.active_puzzles = {}
+    gs.completed_puzzles = {}
+
+    local puzzle_image = {}  -- stand-in for a love.graphics.Image; only its identity matters here
+    local spawned = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local p = JigsawPiece.new(col * C.SLOT, {1, 1, 1, 1},
+                { image = {}, quad = {}, row = row, col = col })
+            p.sprite.y = row * C.SLOT
+            gs.pieces[#gs.pieces + 1] = p
+            spawned[#spawned + 1] = p
+            gs.drawer:add(p, C.PRIORITY_PIECE)
+            gs.pieces_in_drawer[p] = true
+        end
+    end
+
+    local entry = {
+        pieces = spawned,
+        piece_count = 9,
+        solved = false,
+        image = puzzle_image,
+        cols = 3,
+        rows = 3,
+    }
+    gs.active_puzzles[#gs.active_puzzles + 1] = entry
+
+    gs:update(1 / 60)
+    assert(entry.solved == true, "entry should be solved once the correctly-arranged pieces are detected")
+
+    gs:update(C.PIECE_FADE_DURATION)
+
+    assert(#gs.completed_puzzles == 1,
+        "one puzzle should be shelved onto completed_puzzles after fully fading, got " .. #gs.completed_puzzles)
+    local shelved = gs.completed_puzzles[1]
+    assert(shelved.image == puzzle_image, "shelved entry.image should be the solved puzzle's image")
+    assert(shelved.cols == 3 and shelved.rows == 3, "shelved entry should carry the puzzle's cols/rows")
+    assert(shelved.y == -(C.SLOT + 3 * C.SLOT),
+        "shelved entry.y should be -(SLOT + rows*SLOT), got " .. tostring(shelved.y))
+    assert(shelved.x == 0, "the first-ever shelved puzzle should be placed at x = 0, got " .. tostring(shelved.x))
+
+    local found_in_drawer = false
+    for _, layer_entry in ipairs(gs.drawer.layers) do
+        if layer_entry.sprite == shelved then found_in_drawer = true end
+    end
+    assert(found_in_drawer, "shelved entry should be added to the drawer so it renders on the trophy shelf")
+
+    -- Solve and fade a second, differently-sized puzzle; it should land to
+    -- the right of the first one, offset by the first puzzle's pixel width
+    -- plus a fixed C.SLOT gap.
+    local spawned_b = {}
+    for row = 0, 1 do
+        for col = 0, 1 do
+            local p = JigsawPiece.new((col + 10) * C.SLOT, {0, 1, 1, 1},
+                { image = {}, quad = {}, row = row, col = col })
+            p.sprite.y = (row + 10) * C.SLOT
+            gs.pieces[#gs.pieces + 1] = p
+            spawned_b[#spawned_b + 1] = p
+            gs.drawer:add(p, C.PRIORITY_PIECE)
+            gs.pieces_in_drawer[p] = true
+        end
+    end
+    local puzzle_image_b = {}
+    local entry_b = {
+        pieces = spawned_b,
+        piece_count = 4,
+        solved = false,
+        image = puzzle_image_b,
+        cols = 2,
+        rows = 2,
+    }
+    gs.active_puzzles[#gs.active_puzzles + 1] = entry_b
+
+    gs:update(1 / 60)
+    assert(entry_b.solved == true, "second entry should solve once its pieces are correctly arranged")
+    gs:update(C.PIECE_FADE_DURATION)
+
+    assert(#gs.completed_puzzles == 2,
+        "a second puzzle should be shelved after fading, got " .. #gs.completed_puzzles)
+    local shelved_b = gs.completed_puzzles[2]
+    assert(shelved_b.x == shelved.cols * C.SLOT + C.SLOT,
+        "second shelved puzzle's x should sit one C.SLOT gap after the first, got " .. tostring(shelved_b.x))
+    assert(shelved_b.y == -(C.SLOT + 2 * C.SLOT),
+        "second shelved entry.y should be -(SLOT + rows*SLOT) for its own rows, got " .. tostring(shelved_b.y))
+
+    print("PASS: game_scene: fully-faded solved puzzles are shelved onto completed_puzzles at the deterministic left-to-right slot position")
 end
 
 -- SpawnButton ---------------------------------------------------------------

@@ -50,6 +50,7 @@ function GameScene:on_enter()
     self.pieces = {}
     self.pieces_in_drawer = {}
     self.active_puzzles = {}
+    self.completed_puzzles = {}
 
     local box = nil
     if GameState:can_start_puzzle() then
@@ -63,6 +64,9 @@ function GameScene:on_enter()
             pieces = box.spawned,
             piece_count = box.piece_count,
             solved = false,
+            image = box.image,
+            cols = box.cols,
+            rows = box.rows,
         }
         GameState:puzzle_started()
     end
@@ -101,6 +105,9 @@ function GameScene:_spawn_box()
                 pieces = box.spawned,
                 piece_count = box.piece_count,
                 solved = false,
+                image = box.image,
+                cols = box.cols,
+                rows = box.rows,
             }
             GameState:puzzle_started()
             return
@@ -163,6 +170,26 @@ function GameScene:update(dt)
                 end
             end
             if all_faded then
+                if entry.image and entry.cols and entry.rows then
+                    local x = 0
+                    local last = self.completed_puzzles[#self.completed_puzzles]
+                    if last then
+                        x = last.x + last.cols * C.SLOT + C.SLOT
+                    end
+                    local y = -(C.SLOT + entry.rows * C.SLOT)
+
+                    local shelved = {
+                        image = entry.image,
+                        x = x,
+                        y = y,
+                        cols = entry.cols,
+                        rows = entry.rows,
+                        draw = function(self) love.graphics.draw(self.image, self.x, self.y) end,
+                    }
+                    self.completed_puzzles[#self.completed_puzzles + 1] = shelved
+                    self.drawer:add(shelved, C.PRIORITY_PIECE)
+                end
+
                 table.remove(self.active_puzzles, i)
             end
         end

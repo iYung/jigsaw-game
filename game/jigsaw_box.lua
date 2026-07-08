@@ -1,12 +1,7 @@
 local Sprite = require("lua/core/sprite")
 local JigsawPiece = require("game/jigsaw_piece")
 local C = require("game/constants")
-
-local PUZZLE_IMAGES = {
-    { number = 1, path = "assets/puzzles/1.png" },
-    { number = 2, path = "assets/puzzles/2.png" },
-    { number = 3, path = "assets/puzzles/3.png" },
-}
+local PuzzleCatalog = require("game/puzzle_catalog")
 
 local JigsawBox = {}
 JigsawBox.__index = JigsawBox
@@ -20,8 +15,9 @@ function JigsawBox.new(x, y, world_w, world_h)
     self.world_w = world_w
     self.world_h = world_h
 
-    local puzzle_entry = PUZZLE_IMAGES[math.random(#PUZZLE_IMAGES)]
-    local puzzle_image = love.graphics.newImage(puzzle_entry.path)
+    local list = PuzzleCatalog.list()
+    local path = list[math.random(#list)]
+    local puzzle_image = love.graphics.newImage(path)
     local imgW, imgH = puzzle_image:getDimensions()
     local cols = imgW / C.SLOT
     local rows = imgH / C.SLOT

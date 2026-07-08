@@ -51,6 +51,9 @@ function GameScene:on_enter()
     self.pieces_in_drawer = {}
     self.active_puzzles = {}
     self.completed_puzzles = {}
+    self.shelf_row_x = 0
+    self.shelf_row_bottom = -C.SLOT
+    self.shelf_row_max_height = 0
 
     local box = nil
     if GameState:can_start_puzzle() then
@@ -171,12 +174,21 @@ function GameScene:update(dt)
             end
             if all_faded then
                 if entry.image and entry.cols and entry.rows then
-                    local x = 0
-                    local last = self.completed_puzzles[#self.completed_puzzles]
-                    if last then
-                        x = last.x + last.cols * C.SLOT + C.SLOT
+                    local width = entry.cols * C.SLOT
+                    local height = entry.rows * C.SLOT
+
+                    -- Wrap to a new row once the current row's cumulative
+                    -- width would exceed the world width. Never wrap an
+                    -- empty row, even if a single puzzle is wider than the
+                    -- world, to avoid an infinite-wrap loop.
+                    if self.shelf_row_x > 0 and self.shelf_row_x + width > self.world_w then
+                        self.shelf_row_bottom = self.shelf_row_bottom - self.shelf_row_max_height - C.SLOT
+                        self.shelf_row_x = 0
+                        self.shelf_row_max_height = 0
                     end
-                    local y = -(C.SLOT + entry.rows * C.SLOT)
+
+                    local x = self.shelf_row_x
+                    local y = self.shelf_row_bottom - height
 
                     local shelved = {
                         image = entry.image,
@@ -188,6 +200,9 @@ function GameScene:update(dt)
                     }
                     self.completed_puzzles[#self.completed_puzzles + 1] = shelved
                     self.drawer:add(shelved, C.PRIORITY_PIECE)
+
+                    self.shelf_row_x = self.shelf_row_x + width + C.SLOT
+                    self.shelf_row_max_height = math.max(self.shelf_row_max_height, height)
                 end
 
                 table.remove(self.active_puzzles, i)

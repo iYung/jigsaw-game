@@ -1474,6 +1474,78 @@ do
     print("PASS: game_scene: fully-faded solved puzzles are shelved onto completed_puzzles at the deterministic left-to-right slot position")
 end
 
+-- integration: the trophy shelf wraps to a new row once a row's cumulative
+-- width would exceed the world width ----------------------------------------
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    gs.pieces = {}
+    gs.pieces_in_drawer = {}
+    gs.active_puzzles = {}
+    gs.completed_puzzles = {}
+
+    -- Helper: solve and fully fade a synthetic 5x5 (hard-tier-sized) puzzle,
+    -- bypassing the real box/spawn path, same technique as the earlier shelf
+    -- test. `offset` keeps each puzzle's pieces spatially distinct so the
+    -- solver doesn't confuse one puzzle's pieces for another's.
+    local function solve_and_fade_5x5(offset)
+        local puzzle_image = {}
+        local spawned = {}
+        for row = 0, 4 do
+            for col = 0, 4 do
+                local p = JigsawPiece.new((col + offset) * C.SLOT, {1, 1, 1, 1},
+                    { image = {}, quad = {}, row = row, col = col })
+                p.sprite.y = (row + offset) * C.SLOT
+                gs.pieces[#gs.pieces + 1] = p
+                spawned[#spawned + 1] = p
+                gs.drawer:add(p, C.PRIORITY_PIECE)
+                gs.pieces_in_drawer[p] = true
+            end
+        end
+        local entry = {
+            pieces = spawned,
+            piece_count = 25,
+            solved = false,
+            image = puzzle_image,
+            cols = 5,
+            rows = 5,
+        }
+        gs.active_puzzles[#gs.active_puzzles + 1] = entry
+        gs:update(1 / 60)
+        assert(entry.solved == true, "synthetic 5x5 entry should solve once correctly arranged")
+        gs:update(C.PIECE_FADE_DURATION)
+    end
+
+    -- world_w is 1280px; each 5x5 puzzle is 320px wide plus a 64px gap
+    -- (384px per slot), so a 4th puzzle in the same row would push
+    -- cumulative width to 4*384 = 1536 > 1280 -- it must wrap to a new row.
+    for i = 1, 4 do
+        solve_and_fade_5x5(i * 20)
+    end
+
+    assert(#gs.completed_puzzles == 4, "all four solved puzzles should be shelved, got " .. #gs.completed_puzzles)
+
+    local row0_y = gs.completed_puzzles[1].y
+    assert(gs.completed_puzzles[1].x == 0, "1st puzzle should start row 0 at x = 0")
+    assert(gs.completed_puzzles[2].x == 5 * C.SLOT + C.SLOT, "2nd puzzle should sit right after the 1st in row 0")
+    assert(gs.completed_puzzles[3].x == 2 * (5 * C.SLOT + C.SLOT), "3rd puzzle should sit right after the 2nd in row 0")
+    assert(gs.completed_puzzles[2].y == row0_y and gs.completed_puzzles[3].y == row0_y,
+        "puzzles sharing a row should share the same y")
+
+    local fourth = gs.completed_puzzles[4]
+    assert(fourth.x == 0, "the 4th puzzle should wrap to a new row and reset to x = 0, got " .. tostring(fourth.x))
+    assert(fourth.y == row0_y - 5 * C.SLOT - C.SLOT,
+        "the wrapped row's y should sit one C.SLOT above the tallest puzzle in the previous row, got " .. tostring(fourth.y))
+    assert(fourth.y ~= row0_y, "the wrapped puzzle should not share row 0's y")
+
+    print("PASS: game_scene: trophy shelf wraps to a new row once a row's cumulative width would exceed the world width")
+end
+
 -- SpawnButton ---------------------------------------------------------------
 local SpawnButton = require("game/spawn_button")
 

@@ -34,6 +34,7 @@ function JigsawBox.new(x, y, world_w, world_h)
     self.world_h = world_h
 
     local puzzle_image = love.graphics.newImage(path)
+    self.image = puzzle_image
     local imgW, imgH = puzzle_image:getDimensions()
     local cols = imgW / C.SLOT
     local rows = imgH / C.SLOT

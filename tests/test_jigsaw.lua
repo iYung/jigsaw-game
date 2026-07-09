@@ -359,6 +359,85 @@ do
     print("PASS: jigsaw_box: new() stores the loaded puzzle image on self.image")
 end
 
+-- JigsawBox.new without spawn_from (5th arg omitted) is unaffected --------
+-- Regression guard: legacy call sites that don't pass spawn_from must keep
+-- landing directly in "waiting" at (x, y), with target_x/target_y matching
+-- the constructor's x/y (per the design doc, target_x/target_y are always
+-- set regardless of flight state).
+
+do
+    GameState:reset()
+    local box = new_easy_box(128, 128)
+    assert(box.state == "waiting", "box constructed without spawn_from should still start in state 'waiting' (legacy behavior), got " .. tostring(box.state))
+    assert(box.target_x == 128,    "box without spawn_from should still expose target_x == x, got " .. tostring(box.target_x))
+    assert(box.target_y == 128,    "box without spawn_from should still expose target_y == y, got " .. tostring(box.target_y))
+    print("PASS: jigsaw_box: new() without spawn_from still starts in 'waiting' at (x, y) with target_x/target_y set (regression guard)")
+end
+
+-- JigsawBox.new with spawn_from starts in state 'flying' -------------------
+
+do
+    GameState:reset()
+    local box = new_easy_box(400, 300, 2000, 2000, {x = 10, y = 20})
+    assert(box.state == "flying", "box constructed with spawn_from should start in state 'flying', got " .. tostring(box.state))
+    assert(box.sprite.x == 10,    "flying box sprite.x should start at spawn_from.x (10), got " .. tostring(box.sprite.x))
+    assert(box.sprite.y == 20,    "flying box sprite.y should start at spawn_from.y (20), got " .. tostring(box.sprite.y))
+    assert(box.target_x == 400,   "flying box target_x should be the constructor's x (400) -- the final resting cell, got " .. tostring(box.target_x))
+    assert(box.target_y == 300,   "flying box target_y should be the constructor's y (300) -- the final resting cell, got " .. tostring(box.target_y))
+    assert(box.fly_timer == C.BOX_FLY_DURATION,
+        "flying box fly_timer should start at C.BOX_FLY_DURATION, got " .. tostring(box.fly_timer))
+    print("PASS: jigsaw_box: new() with spawn_from starts in state 'flying' at the spawn point, targeting the final cell")
+end
+
+-- update() on a flying box moves it partway toward the target --------------
+
+do
+    GameState:reset()
+    local box = new_easy_box(400, 300, 2000, 2000, {x = 0, y = 0})
+    local pieces = {}
+    local step = C.BOX_FLY_DURATION / 4
+    box:update(step, pieces)
+    box:update(step, pieces)
+    assert(box.state == "flying",
+        "box should still be 'flying' after " .. (2 * step) .. "s of a " .. C.BOX_FLY_DURATION .. "s flight, got " .. tostring(box.state))
+    assert(box.sprite.x > 0 and box.sprite.x < 400,
+        "flying box sprite.x should have moved partway between spawn (0) and target (400), got " .. tostring(box.sprite.x))
+    assert(box.sprite.y > 0 and box.sprite.y < 300,
+        "flying box sprite.y should have moved partway between spawn (0) and target (300), got " .. tostring(box.sprite.y))
+    print("PASS: jigsaw_box: update() with small dt steps moves a flying box partway to its target, state stays 'flying'")
+end
+
+-- update() past BOX_FLY_DURATION lands exactly on target and flips to 'waiting'
+
+do
+    GameState:reset()
+    local box = new_easy_box(400, 300, 2000, 2000, {x = 0, y = 0})
+    local pieces = {}
+    box:update(C.BOX_FLY_DURATION + 1.0, pieces)
+    assert(box.state == "waiting", "box should be 'waiting' once fly_timer has run out, got " .. tostring(box.state))
+    assert(box.sprite.x == box.target_x, "flying box sprite.x should snap exactly to target_x (400) once flight completes, got " .. tostring(box.sprite.x))
+    assert(box.sprite.y == box.target_y, "flying box sprite.y should snap exactly to target_y (300) once flight completes, got " .. tostring(box.sprite.y))
+    print("PASS: jigsaw_box: update() with dt exceeding BOX_FLY_DURATION snaps sprite exactly to target (no overshoot) and flips state to 'waiting'")
+end
+
+-- a flying box is not interactable ------------------------------------------
+-- player.lua gates box interaction on `b.state == "waiting"` (see
+-- game/player.lua); a box in "flying" state must fail that check, and
+-- JigsawBox:interact() itself (which only acts when self.state == "waiting")
+-- must be a no-op while flying.
+
+do
+    GameState:reset()
+    local box = new_easy_box(400, 300, 2000, 2000, {x = 0, y = 0})
+    assert(box.state == "flying", "sanity check: box should start 'flying'")
+    assert(box.state ~= "waiting",
+        "a flying box's state must not satisfy player.lua's interaction gate (b.state == \"waiting\") while flying")
+    box:interact()
+    assert(box.state == "flying",
+        "interact() should be a no-op on a flying box (JigsawBox:interact() only transitions state when self.state == 'waiting'), got " .. tostring(box.state))
+    print("PASS: jigsaw_box: a box in 'flying' state fails player.lua's 'waiting'-state interaction gate, and interact() is a no-op while flying")
+end
+
 -- interact() --------------------------------------------------------------
 
 do
@@ -1788,7 +1867,7 @@ do
 
     local seen = {}
     for _, box in ipairs(gs.boxes) do
-        local bx, by = box.sprite.x, box.sprite.y
+        local bx, by = box.target_x, box.target_y
 
         assert(bx >= 0 and bx <= gs.world_w - C.SLOT,
             "box x should be within [0, world_w - SLOT], got " .. tostring(bx))

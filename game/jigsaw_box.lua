@@ -7,7 +7,7 @@ local GameState = require("game/game_state")
 local JigsawBox = {}
 JigsawBox.__index = JigsawBox
 
-function JigsawBox.new(x, y, world_w, world_h)
+function JigsawBox.new(x, y, world_w, world_h, spawn_from)
     local by_tier = PuzzleCatalog.list_by_tier()
     local pool = {}
     for tier, paths in pairs(by_tier) do
@@ -35,6 +35,14 @@ function JigsawBox.new(x, y, world_w, world_h)
     self.spawn_timer = 0
     self.world_w = world_w
     self.world_h = world_h
+
+    self.target_x, self.target_y = x, y
+    if spawn_from then
+        self.state = "flying"
+        self.spawn_x, self.spawn_y = spawn_from.x, spawn_from.y
+        self.sprite.x, self.sprite.y = self.spawn_x, self.spawn_y
+        self.fly_timer = C.BOX_FLY_DURATION
+    end
 
     local puzzle_image = love.graphics.newImage(path)
     self.image = puzzle_image
@@ -75,6 +83,18 @@ function JigsawBox:interact()
 end
 
 function JigsawBox:update(dt, pieces)
+    if self.state == "flying" then
+        self.fly_timer = self.fly_timer - dt
+        local t = 1 - math.max(0, self.fly_timer) / C.BOX_FLY_DURATION
+        local eased = 1 - (1 - t) ^ 3  -- ease-out cubic
+        self.sprite.x = self.spawn_x + (self.target_x - self.spawn_x) * eased
+        self.sprite.y = self.spawn_y + (self.target_y - self.spawn_y) * eased
+        if self.fly_timer <= 0 then
+            self.sprite.x, self.sprite.y = self.target_x, self.target_y
+            self.state = "waiting"
+        end
+        return
+    end
     if self.state ~= "ejecting" then return end
     self.spawn_timer = self.spawn_timer - dt
     if self.spawn_timer <= 0 then

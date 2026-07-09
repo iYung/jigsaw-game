@@ -407,6 +407,32 @@ do
     print("PASS: jigsaw_box: update() with small dt steps moves a flying box partway to its target, state stays 'flying'")
 end
 
+-- the flight path arcs (parabolic hop), not a straight line -----------------
+-- spawn and target share the same y, so any straight-line lerp would hold
+-- sprite.y constant at 100 throughout; a parabolic arc dips below it at the
+-- midpoint (screen y decreases = visually "up") and returns to it at the
+-- endpoints, where the arc term is exactly 0.
+
+do
+    GameState:reset()
+    local box = new_easy_box(400, 100, 2000, 2000, {x = 0, y = 100})
+    local pieces = {}
+
+    assert(box.sprite.y == 100, "flying box should start exactly at spawn_from.y (100) before any update, got " .. tostring(box.sprite.y))
+
+    local step = C.BOX_FLY_DURATION / 2
+    box:update(step, pieces)
+    assert(box.state == "flying", "box should still be 'flying' halfway through the flight")
+    assert(box.sprite.y < 100,
+        "at the midpoint of the flight, sprite.y should be lifted above the straight-line path (< 100) by the parabolic arc, got " .. tostring(box.sprite.y))
+
+    box:update(step + 1.0, pieces)
+    assert(box.state == "waiting", "box should be 'waiting' once the flight completes")
+    assert(box.sprite.y == 100, "flying box sprite.y should land back exactly on target_y (100), arc fully resolved, got " .. tostring(box.sprite.y))
+
+    print("PASS: jigsaw_box: flight path arcs above the straight line mid-flight (parabolic hop) and lands exactly on target")
+end
+
 -- update() past BOX_FLY_DURATION lands exactly on target and flips to 'waiting'
 
 do

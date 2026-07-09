@@ -323,6 +323,20 @@ local function new_easy_box(...)
     return box
 end
 
+-- Helper: unlocks med and hard tiers by directly driving solved_by_tier via
+-- puzzle_solved(), the same public API GameScene uses, rather than poking
+-- GameState.solved_by_tier fields directly. Does not call GameState:reset()
+-- itself -- callers reset() first so this only affects the counters, not any
+-- seen-path state already set up by the caller.
+local function unlock_all_tiers()
+    for _ = 1, GameState.UNLOCK_THRESHOLD do
+        GameState:puzzle_solved("easy")
+    end
+    for _ = 1, GameState.UNLOCK_THRESHOLD do
+        GameState:puzzle_solved("med")
+    end
+end
+
 -- JigsawBox.new -----------------------------------------------------------
 
 do
@@ -607,10 +621,14 @@ do
     end
 
     -- Under the no-repeat contract, a full unseen-pool cycle can only
-    -- produce #PuzzleCatalog.list() distinct successful constructions
-    -- (currently 5) before JigsawBox.new starts returning nil, so the trial
-    -- count is derived from the catalog size rather than a fixed literal.
+    -- produce #PuzzleCatalog.list() distinct successful constructions before
+    -- JigsawBox.new starts returning nil, so the trial count is derived from
+    -- the catalog size rather than a fixed literal. This test's intent is
+    -- "every catalog image is reachable", which now requires med/hard to be
+    -- unlocked first (a fresh reset() alone would cap selection to just the
+    -- easy tier's images under the progressive-difficulty-unlock gating).
     GameState:reset()
+    unlock_all_tiers()
     local trial_count = #PuzzleCatalog.list()
 
     local real_newImage = love.graphics.newImage
@@ -669,8 +687,11 @@ do
     -- its own. This test now primarily guards the no-repeat/exhaustion-
     -- after-N-calls contract: exactly #PuzzleCatalog.list() constructions
     -- succeed, each catalog path appears exactly once, and the call after
-    -- that returns nil.
+    -- that returns nil. Unlock med/hard first so the loop can reach the
+    -- whole catalog rather than stopping at the easy tier's pool (see
+    -- unlock_all_tiers()).
     GameState:reset()
+    unlock_all_tiers()
 
     local real_newImage = love.graphics.newImage
     local captured_paths = {}
@@ -702,6 +723,85 @@ do
     print("PASS: jigsaw_box: new() covers the whole catalog exactly once each, then returns nil (no-repeat/exhaustion contract)")
 end
 
+-- progressive-difficulty-unlock: with a fresh reset() (med/hard locked), -----
+-- JigsawBox.new() only ever selects easy-tier paths --------------------------
+
+do
+    GameState:reset()
+    local easy_paths = {}
+    for _, path in ipairs(PuzzleCatalog.list_by_tier().easy) do
+        easy_paths[path] = true
+    end
+    local easy_count = #PuzzleCatalog.list_by_tier().easy
+
+    local real_newImage = love.graphics.newImage
+    local last_path = nil
+    love.graphics.newImage = function(path, ...)
+        last_path = path
+        return real_newImage(path, ...)
+    end
+
+    local tiers_seen = {}
+    local draws = 0
+    for _ = 1, #PuzzleCatalog.list() do
+        local box = JigsawBox.new(128, 128)
+        if not box then break end
+        draws = draws + 1
+        tiers_seen[box.tier] = true
+        assert(box.tier == "easy",
+            "with med/hard locked, box.tier should always be 'easy', got " .. tostring(box.tier))
+        assert(easy_paths[last_path],
+            "with med/hard locked, the loaded image path should be one of the easy-tier catalog paths, got " ..
+            tostring(last_path))
+    end
+
+    love.graphics.newImage = real_newImage
+
+    assert(draws == easy_count,
+        "expected exactly " .. easy_count .. " successful draws (the easy-tier pool) before locked tiers leave " ..
+        "the pool empty, got " .. draws)
+    assert(tiers_seen.med == nil and tiers_seen.hard == nil,
+        "no med/hard box should ever be produced while those tiers are locked")
+
+    -- Pool is now empty (easy pool drained, med/hard still locked): further
+    -- construction attempts must return nil, not fall through to a locked tier.
+    assert(JigsawBox.new(128, 128) == nil,
+        "JigsawBox.new() should return nil once the easy pool is drained and med/hard remain locked")
+    print("PASS: jigsaw_box: with a fresh reset() (med/hard locked), JigsawBox.new() only ever selects easy-tier paths")
+end
+
+-- progressive-difficulty-unlock: unlocking med (3 easy solves) makes med- ----
+-- tier paths selectable, while hard (needing 3 med solves) stays locked ------
+
+do
+    GameState:reset()
+    for _ = 1, GameState.UNLOCK_THRESHOLD do
+        GameState:puzzle_solved("easy")
+    end
+    assert(GameState:is_tier_unlocked("med") == true, "test setup: med should be unlocked after 3 easy solves")
+    assert(GameState:is_tier_unlocked("hard") == false, "test setup: hard should still be locked (0 med solves)")
+
+    -- The unlocked pool (easy + med) has a bounded, known size, so drawing
+    -- until exhaustion is guaranteed (not merely probabilistic) to hit every
+    -- unlocked-tier path at least once, including both med images.
+    local tiers_seen = {}
+    local found_med = false
+    local box
+    repeat
+        box = JigsawBox.new(0, 0)
+        if box then
+            tiers_seen[box.tier] = true
+            if box.tier == "med" then found_med = true end
+        end
+    until not box
+
+    assert(found_med,
+        "expected at least one JigsawBox.new() draw to pick a med-tier path once med is unlocked")
+    assert(tiers_seen.hard == nil,
+        "hard-tier paths should never be selected while hard remains locked, but a hard box was produced")
+    print("PASS: jigsaw_box: unlocking med (3 easy solves) makes med-tier paths selectable while hard remains locked")
+end
+
 -- grid inference for non-3x3 catalog images (med/hard) ---------------------
 -- Uses a bounded-retry loop (mirroring the bounded slot search in
 -- game/jigsaw_box.lua's _eject_next) to reliably land on a med/ image, since
@@ -709,7 +809,11 @@ end
 -- JigsawBox.new() call will pick.
 
 do
+    -- med is locked on a fresh reset() under the progressive-difficulty-
+    -- unlock gating, so it must be unlocked first or this retry loop would
+    -- only ever see easy-tier images.
     GameState:reset()
+    unlock_all_tiers()
     local real_newImage = love.graphics.newImage
     local last_path = nil
     love.graphics.newImage = function(path, ...)
@@ -737,7 +841,11 @@ do
 end
 
 do
+    -- hard is locked on a fresh reset() under the progressive-difficulty-
+    -- unlock gating, so it must be unlocked first (via med) or this retry
+    -- loop would never see a hard/ image.
     GameState:reset()
+    unlock_all_tiers()
     local real_newImage = love.graphics.newImage
     local last_path = nil
     love.graphics.newImage = function(path, ...)
@@ -1260,7 +1368,7 @@ do
     end
     assert(#gs.pieces == 9, "test setup should have 9 pieces before update()")
 
-    local entry = { pieces = spawned, piece_count = 9, solved = false }
+    local entry = { pieces = spawned, piece_count = 9, solved = false, tier = "easy" }
     gs.active_puzzles[#gs.active_puzzles + 1] = entry
 
     -- First update(): the one-shot solved check fires (assembled == true),
@@ -1334,7 +1442,7 @@ do
             gs.pieces_in_drawer[p] = true
         end
     end
-    local entry_a = { pieces = spawned_a, piece_count = 9, solved = false }
+    local entry_a = { pieces = spawned_a, piece_count = 9, solved = false, tier = "easy" }
     gs.active_puzzles[#gs.active_puzzles + 1] = entry_a
 
     -- Puzzle B: a 2x2 (4-piece) puzzle, offset well clear of puzzle A, but
@@ -1354,7 +1462,7 @@ do
         end
     end
     spawned_b[4].rotation_step = 1  -- misarranged: not assembled yet
-    local entry_b = { pieces = spawned_b, piece_count = 4, solved = false }
+    local entry_b = { pieces = spawned_b, piece_count = 4, solved = false, tier = "easy" }
     gs.active_puzzles[#gs.active_puzzles + 1] = entry_b
 
     -- First update(): puzzle A (correctly arranged, 9 pieces) should solve
@@ -1487,6 +1595,7 @@ do
         image = puzzle_image,
         cols = 3,
         rows = 3,
+        tier = "easy",
     }
     gs.active_puzzles[#gs.active_puzzles + 1] = entry
 
@@ -1533,6 +1642,7 @@ do
         image = puzzle_image_b,
         cols = 2,
         rows = 2,
+        tier = "easy",
     }
     gs.active_puzzles[#gs.active_puzzles + 1] = entry_b
 
@@ -1591,6 +1701,7 @@ do
             image = puzzle_image,
             cols = 5,
             rows = 5,
+            tier = "hard",
         }
         gs.active_puzzles[#gs.active_puzzles + 1] = entry
         gs:update(1 / 60)

@@ -41,13 +41,18 @@ do
     GameState:puzzle_started()
     GameState:puzzle_started()
     GameState:puzzle_started()
-    GameState:puzzle_solved()
-    GameState:puzzle_solved()
+    GameState:puzzle_solved("easy")
+    GameState:puzzle_solved("easy")
     assert(GameState.active_count == 1,
         "3 started, 2 solved should leave active_count == 1, got " .. tostring(GameState.active_count))
     assert(GameState.solved_count == 2,
         "3 started, 2 solved should leave solved_count == 2, got " .. tostring(GameState.solved_count))
-    print("PASS: game_state: puzzle_solved() increments solved_count and decrements active_count per call")
+    assert(GameState.solved_by_tier.easy == 2,
+        "2 puzzle_solved('easy') calls should leave solved_by_tier.easy == 2, got " .. tostring(GameState.solved_by_tier.easy))
+    assert(GameState.solved_by_tier.med == 0 and GameState.solved_by_tier.hard == 0,
+        "solved_by_tier.med/hard should remain 0 when only 'easy' puzzles were solved, got med=" ..
+        tostring(GameState.solved_by_tier.med) .. " hard=" .. tostring(GameState.solved_by_tier.hard))
+    print("PASS: game_state: puzzle_solved(tier) increments solved_count/solved_by_tier[tier] and decrements active_count per call")
 end
 
 -- can_start_puzzle() cap behavior --------------------------------------------
@@ -67,7 +72,7 @@ do
     assert(GameState:can_start_puzzle() == false,
         "can_start_puzzle() should be false once active_count == MAX_ACTIVE_PUZZLES")
 
-    GameState:puzzle_solved()
+    GameState:puzzle_solved("easy")
     assert(GameState:can_start_puzzle() == true,
         "can_start_puzzle() should flip back to true after one puzzle_solved() brings active_count back under the cap")
     print("PASS: game_state: can_start_puzzle() reflects the MAX_ACTIVE_PUZZLES cap and recovers after a solve")
@@ -79,7 +84,7 @@ do
     GameState:reset()
     GameState:puzzle_started()
     GameState:puzzle_started()
-    GameState:puzzle_solved()
+    GameState:puzzle_solved("easy")
     assert(GameState.active_count ~= 0 or GameState.solved_count ~= 0,
         "test setup should have driven at least one counter non-zero before reset()")
 
@@ -101,4 +106,95 @@ do
     assert(GameState:is_seen("easy", "assets/puzzles/easy/1.png") == true,
         "mark_seen() should make is_seen() true for that path/tier")
     print("PASS: game_state: mark_seen()/is_seen() still work post-reset (unaffected by the new counters)")
+end
+
+-- is_tier_unlocked("easy") is always true -------------------------------------
+
+do
+    GameState:reset()
+    assert(GameState:is_tier_unlocked("easy") == true,
+        "easy tier should always be unlocked, including right after reset()")
+    GameState:puzzle_solved("med")
+    GameState:puzzle_solved("hard")
+    assert(GameState:is_tier_unlocked("easy") == true,
+        "easy tier should remain unlocked regardless of med/hard solve counts")
+    print("PASS: game_state: is_tier_unlocked('easy') is always true")
+end
+
+-- is_tier_unlocked("med") flips true once 3 easy puzzles are solved ----------
+
+do
+    GameState:reset()
+    assert(GameState:is_tier_unlocked("med") == false,
+        "med tier should be locked on a fresh reset() (0 easy puzzles solved)")
+    for i = 1, GameState.UNLOCK_THRESHOLD - 1 do
+        GameState:puzzle_solved("easy")
+        assert(GameState:is_tier_unlocked("med") == false,
+            "med tier should still be locked after " .. i .. " of " .. GameState.UNLOCK_THRESHOLD .. " easy solves")
+    end
+    GameState:puzzle_solved("easy")
+    assert(GameState:is_tier_unlocked("med") == true,
+        "med tier should unlock once solved_by_tier.easy reaches UNLOCK_THRESHOLD (" ..
+        GameState.UNLOCK_THRESHOLD .. "), got solved_by_tier.easy=" .. tostring(GameState.solved_by_tier.easy))
+    print("PASS: game_state: is_tier_unlocked('med') is false until 3 'easy' puzzles are solved, then true")
+end
+
+-- is_tier_unlocked("hard") flips true once 3 med puzzles are solved ----------
+
+do
+    GameState:reset()
+    assert(GameState:is_tier_unlocked("hard") == false,
+        "hard tier should be locked on a fresh reset() (0 med puzzles solved)")
+    for i = 1, GameState.UNLOCK_THRESHOLD - 1 do
+        GameState:puzzle_solved("med")
+        assert(GameState:is_tier_unlocked("hard") == false,
+            "hard tier should still be locked after " .. i .. " of " .. GameState.UNLOCK_THRESHOLD .. " med solves")
+    end
+    GameState:puzzle_solved("med")
+    assert(GameState:is_tier_unlocked("hard") == true,
+        "hard tier should unlock once solved_by_tier.med reaches UNLOCK_THRESHOLD (" ..
+        GameState.UNLOCK_THRESHOLD .. "), got solved_by_tier.med=" .. tostring(GameState.solved_by_tier.med))
+    print("PASS: game_state: is_tier_unlocked('hard') is false until 3 'med' puzzles are solved, then true")
+end
+
+-- puzzle_solved(tier) only increments that tier's counter --------------------
+
+do
+    GameState:reset()
+    GameState:puzzle_solved("easy")
+    GameState:puzzle_solved("easy")
+    GameState:puzzle_solved("med")
+    assert(GameState.solved_by_tier.easy == 2,
+        "solved_by_tier.easy should be 2 after two puzzle_solved('easy') calls, got " ..
+        tostring(GameState.solved_by_tier.easy))
+    assert(GameState.solved_by_tier.med == 1,
+        "solved_by_tier.med should be 1 after one puzzle_solved('med') call, got " ..
+        tostring(GameState.solved_by_tier.med))
+    assert(GameState.solved_by_tier.hard == 0,
+        "solved_by_tier.hard should remain 0 -- no puzzle_solved('hard') calls were made, got " ..
+        tostring(GameState.solved_by_tier.hard))
+    assert(GameState.solved_count == 3,
+        "flat solved_count should still be the sum of all puzzle_solved() calls regardless of tier, got " ..
+        tostring(GameState.solved_count))
+    print("PASS: game_state: puzzle_solved(tier) increments solved_by_tier[tier] only, leaving other tiers' counts untouched")
+end
+
+-- reset() clears solved_by_tier back to {easy=0, med=0, hard=0} --------------
+
+do
+    GameState:reset()
+    GameState:puzzle_solved("easy")
+    GameState:puzzle_solved("med")
+    GameState:puzzle_solved("hard")
+    assert(GameState.solved_by_tier.easy == 1 and GameState.solved_by_tier.med == 1 and GameState.solved_by_tier.hard == 1,
+        "test setup should have driven all three solved_by_tier counters to 1 before reset()")
+
+    GameState:reset()
+    assert(GameState.solved_by_tier.easy == 0,
+        "solved_by_tier.easy should be 0 after reset(), got " .. tostring(GameState.solved_by_tier.easy))
+    assert(GameState.solved_by_tier.med == 0,
+        "solved_by_tier.med should be 0 after reset(), got " .. tostring(GameState.solved_by_tier.med))
+    assert(GameState.solved_by_tier.hard == 0,
+        "solved_by_tier.hard should be 0 after reset(), got " .. tostring(GameState.solved_by_tier.hard))
+    print("PASS: game_state: reset() clears solved_by_tier back to {easy=0, med=0, hard=0}")
 end

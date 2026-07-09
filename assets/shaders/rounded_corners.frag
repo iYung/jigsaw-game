@@ -8,9 +8,17 @@ const float RADIUS = 8.0;
 
 uniform vec2 size;
 
+// UV bounds (within the drawn texture) of the region actually being drawn:
+// xy = min corner, zw = max corner. For a plain full-image draw this is
+// {0,0,1,1}; for a Quad draw (e.g. a jigsaw piece sampled from a shared
+// puzzle-image atlas) this is the quad's own sub-rectangle, since raw
+// texture_coords are normalized to the whole atlas, not the quad.
+uniform vec4 uv_rect;
+
 vec4 effect(vec4 color, Image tex, vec2 texture_coords, vec2 screen_coords)
 {
-    vec2 pixel_pos = texture_coords * size;
+    vec2 local_uv = (texture_coords - uv_rect.xy) / (uv_rect.zw - uv_rect.xy);
+    vec2 pixel_pos = local_uv * size;
 
     bool outside_footprint = false;
 

@@ -24,7 +24,18 @@ function Sprite:draw()
     love.graphics.translate(self.x + self.width / 2, self.y + self.height / 2)
     love.graphics.rotate(self.rotation)
     love.graphics.scale(self.scale_x, self.scale_y)
-    if self.shader then love.graphics.setShader(self.shader) end
+    if self.shader then
+        love.graphics.setShader(self.shader)
+        if self.shader.send then
+            if self.quad and self.quad.getViewport and self.image then
+                local qx, qy, qw2, qh2 = self.quad:getViewport()
+                local iw, ih = self.image:getWidth(), self.image:getHeight()
+                self.shader:send("uv_rect", { qx / iw, qy / ih, (qx + qw2) / iw, (qy + qh2) / ih })
+            else
+                self.shader:send("uv_rect", { 0, 0, 1, 1 })
+            end
+        end
+    end
     love.graphics.setColor(self.color)
     if self.image then
         if self.quad then

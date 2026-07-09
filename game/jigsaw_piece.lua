@@ -9,6 +9,7 @@ local GROUND_Y = 3 * C.SLOT  -- 192 (ground sits at 4*SLOT=256, pieces rest on t
 
 local piece_shader = Shader.load("assets/shaders/rounded_corners.frag")
 piece_shader:send("size", {C.SLOT, C.SLOT})
+piece_shader:send("uv_rect", {0, 0, 1, 1})
 
 function JigsawPiece.new(x, color, visual)
     local self = setmetatable({}, JigsawPiece)

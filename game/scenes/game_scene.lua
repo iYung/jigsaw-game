@@ -203,6 +203,7 @@ function GameScene:update(dt)
 
                     local entry_shader = Shader.load("assets/shaders/rounded_corners.frag")
                     entry_shader:send("size", {width, height})
+                    entry_shader:send("uv_rect", {0, 0, 1, 1})
 
                     local shelved = {
                         image = entry.image,

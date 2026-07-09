@@ -86,10 +86,16 @@ function JigsawBox:update(dt, pieces)
     if self.state == "flying" then
         self.fly_timer = self.fly_timer - dt
         local t = 1 - math.max(0, self.fly_timer) / C.BOX_FLY_DURATION
-        local eased = 1 - (1 - t) ^ 3  -- ease-out cubic, paces progress along the ground track
-        local arc = 4 * t * (1 - t) * C.BOX_FLY_ARC_HEIGHT  -- parabola: 0 at t=0/1, peaks at t=0.5
-        self.sprite.x = self.spawn_x + (self.target_x - self.spawn_x) * eased
-        self.sprite.y = self.spawn_y + (self.target_y - self.spawn_y) * eased - arc
+        -- Ground and arc share the same linear progress t so the hop's peak
+        -- lines up with the midpoint of the ground track (classic constant-
+        -- velocity-plus-parabola projectile motion). Easing the ground alone
+        -- while the arc stayed on raw t used to desync them -- the ground
+        -- would race ~88% of the way there by t=0.5, so the box looked like
+        -- it snapped near the target and then wobbled in place instead of
+        -- tracing a single upward arc.
+        local arc = 4 * t * (1 - t) * C.BOX_FLY_ARC_HEIGHT  -- 0 at t=0/1, peaks at t=0.5
+        self.sprite.x = self.spawn_x + (self.target_x - self.spawn_x) * t
+        self.sprite.y = self.spawn_y + (self.target_y - self.spawn_y) * t - arc
         if self.fly_timer <= 0 then
             self.sprite.x, self.sprite.y = self.target_x, self.target_y
             self.state = "waiting"

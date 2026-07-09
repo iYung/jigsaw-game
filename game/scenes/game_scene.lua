@@ -18,7 +18,7 @@ end
 
 function GameScene:on_enter()
     local WORLD_W = 20 * C.SLOT  -- 1280px
-    local WORLD_H = WORLD_W
+    local WORLD_H = 10 * C.SLOT  -- 640px
 
     self.world_w = WORLD_W
     self.world_h = WORLD_H

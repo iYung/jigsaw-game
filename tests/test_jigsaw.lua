@@ -1892,8 +1892,8 @@ do
 
     assert(gs.world_w == 20 * C.SLOT,
         "world_w should be halved to 20*C.SLOT (1280), got " .. tostring(gs.world_w))
-    assert(gs.world_h == 20 * C.SLOT,
-        "world_h should be halved to 20*C.SLOT (1280), got " .. tostring(gs.world_h))
+    assert(gs.world_h == 10 * C.SLOT,
+        "world_h should be halved to 10*C.SLOT (640), got " .. tostring(gs.world_h))
     assert(gs.ground == nil, "gs.ground should no longer exist")
     assert(type(gs.floor) == "table", "gs.floor should exist as a table")
     assert(type(gs.floor.draw) == "function", "gs.floor should have a draw function")

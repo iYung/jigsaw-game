@@ -39,6 +39,7 @@ graphics_stub.setDefaultFilter = noop
 graphics_stub.setCanvas        = noop
 graphics_stub.setColor         = noop
 graphics_stub.setShader        = noop
+graphics_stub.newShader        = function(path) return { send = noop } end
 graphics_stub.setBlendMode     = noop
 graphics_stub.setFilter        = noop
 graphics_stub.draw             = noop

@@ -1,5 +1,6 @@
 local Scene      = require("lua/core/scene")
 local Sprite     = require("lua/core/sprite")
+local Shader     = require("lua/core/shader")
 local Player     = require("game/player")
 local C          = require("game/constants")
 local JigsawBox  = require("game/jigsaw_box")
@@ -200,13 +201,21 @@ function GameScene:update(dt)
                     local x = self.shelf_row_x
                     local y = self.shelf_row_bottom - height
 
+                    local entry_shader = Shader.load("assets/shaders/rounded_corners.frag")
+                    entry_shader:send("size", {width, height})
+
                     local shelved = {
                         image = entry.image,
                         x = x,
                         y = y,
                         cols = entry.cols,
                         rows = entry.rows,
-                        draw = function(self) love.graphics.draw(self.image, self.x, self.y) end,
+                        shader = entry_shader,
+                        draw = function(self)
+                            love.graphics.setShader(self.shader)
+                            love.graphics.draw(self.image, self.x, self.y)
+                            love.graphics.setShader()
+                        end,
                     }
                     self.completed_puzzles[#self.completed_puzzles + 1] = shelved
                     self.drawer:add(shelved, C.PRIORITY_PIECE)

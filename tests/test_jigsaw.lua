@@ -1279,6 +1279,29 @@ do
     print("PASS: jigsaw_piece: start_vanish() sets state to 'vanishing' with a full fade_timer")
 end
 
+-- shader wiring (rounded tile corners) ---------------------------------
+
+do
+    local visual = { image = {}, quad = {}, row = 0, col = 0 }
+    local p = JigsawPiece.new(0, {1, 1, 1, 1}, visual)
+    assert(p.sprite.shader ~= nil, "piece constructed with a visual should carry a non-nil sprite.shader")
+    print("PASS: jigsaw_piece: new() with visual assigns a non-nil sprite.shader")
+end
+
+do
+    local visual = { image = {}, quad = {}, row = 0, col = 0 }
+    local p = JigsawPiece.new(0, {1, 1, 1, 1}, visual)
+    p:start_vanish()
+    assert(p.sprite.shader == nil, "start_vanish() should clear sprite.shader to nil")
+    print("PASS: jigsaw_piece: start_vanish() clears sprite.shader to nil")
+end
+
+do
+    local p = JigsawPiece.new(384, {1, 0, 0, 1})
+    assert(p.sprite.shader == nil, "piece constructed without a visual should not carry a shader")
+    print("PASS: jigsaw_piece: new() without visual leaves sprite.shader nil")
+end
+
 -- update_fade() -------------------------------------------------------------
 
 do
@@ -1723,6 +1746,7 @@ do
         if layer_entry.sprite == shelved then found_in_drawer = true end
     end
     assert(found_in_drawer, "shelved entry should be added to the drawer so it renders on the trophy shelf")
+    assert(shelved.shader ~= nil, "shelved entry should carry a non-nil shader for rounded corners")
 
     -- Solve and fade a second, differently-sized puzzle; it should land to
     -- the right of the first one, offset by the first puzzle's pixel width

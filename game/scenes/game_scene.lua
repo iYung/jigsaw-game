@@ -5,6 +5,7 @@ local C          = require("game/constants")
 local JigsawBox  = require("game/jigsaw_box")
 local JigsawSolver = require("game/jigsaw_solver")
 local SpawnButton = require("game/spawn_button")
+local Door       = require("game/door")
 local GameState  = require("game/game_state")
 
 local GameScene = {}
@@ -75,8 +76,11 @@ function GameScene:on_enter()
         GameState:puzzle_started()
     end
 
-    self.spawn_button = SpawnButton.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
+    self.spawn_button = SpawnButton.new(0, 0, function() self:_spawn_box() end)
     self.drawer:add(self.spawn_button, C.PRIORITY_PIECE)
+
+    self.door = Door.new(WORLD_W / 2, 0)
+    self.drawer:add(self.door, C.PRIORITY_PIECE)
 end
 
 function GameScene:_spawn_box()
@@ -91,7 +95,7 @@ function GameScene:_spawn_box()
 
         local occupied = false
         for _, box in ipairs(self.boxes) do
-            if box.sprite.x == cx and box.sprite.y == cy then
+            if box.target_x == cx and box.target_y == cy then
                 occupied = true
                 break
             end
@@ -99,9 +103,13 @@ function GameScene:_spawn_box()
         if not occupied and self.spawn_button.sprite.x == cx and self.spawn_button.sprite.y == cy then
             occupied = true
         end
+        if not occupied and self.door.sprite.x == cx and self.door.sprite.y == cy then
+            occupied = true
+        end
 
         if not occupied then
-            local box = JigsawBox.new(cx, cy, self.world_w, self.world_h)
+            local box = JigsawBox.new(cx, cy, self.world_w, self.world_h,
+                { x = self.door.sprite.x, y = self.door.sprite.y })
             if not box then return end
             self.boxes[#self.boxes + 1] = box
             self.drawer:add(box, C.PRIORITY_PIECE)

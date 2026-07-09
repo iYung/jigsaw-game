@@ -1,10 +1,15 @@
 local Sprite = require("lua/core/sprite")
 local C = require("game/constants")
+local Shader = require("lua/core/shader")
 
 local JigsawPiece = {}
 JigsawPiece.__index = JigsawPiece
 
 local GROUND_Y = 3 * C.SLOT  -- 192 (ground sits at 4*SLOT=256, pieces rest on top)
+
+local piece_shader = Shader.load("assets/shaders/rounded_corners.frag")
+piece_shader:send("size", {C.SLOT, C.SLOT})
+piece_shader:send("uv_rect", {0, 0, 1, 1})
 
 function JigsawPiece.new(x, color, visual)
     local self = setmetatable({}, JigsawPiece)
@@ -16,6 +21,7 @@ function JigsawPiece.new(x, color, visual)
         self.sprite.quad = visual.quad
         self.row = visual.row
         self.col = visual.col
+        self.sprite.shader = piece_shader
     end
     self.state = "grounded"
     self.rotation_step = 0
@@ -40,6 +46,7 @@ end
 function JigsawPiece:start_vanish()
     self.state = "vanishing"
     self.fade_timer = C.PIECE_FADE_DURATION
+    self.sprite.shader = nil
 end
 
 function JigsawPiece:update_fade(dt)

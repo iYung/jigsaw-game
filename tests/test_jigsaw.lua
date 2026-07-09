@@ -1111,6 +1111,26 @@ local function build_assembled_pieces(ox, oy)
     return pieces
 end
 
+-- Builds an array of 9 fake piece tables uniformly rotated by k steps
+-- (k in 1..3), arranged correctly relative to each other under that
+-- rotation's grid mapping (JigsawSolver.rotate_cell), offset by (ox, oy)
+-- slots from the world origin.
+local function build_rotated_assembled_pieces(k, ox, oy)
+    local pieces = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local gx, gy = JigsawSolver.rotate_cell(row, col, k)
+            pieces[#pieces + 1] = {
+                rotation_step = k,
+                row = row,
+                col = col,
+                sprite = { x = (gx + ox) * C.SLOT, y = (gy + oy) * C.SLOT },
+            }
+        end
+    end
+    return pieces
+end
+
 do
     local pieces = build_assembled_pieces(0, 0)
     table.remove(pieces)  -- drop to 8 well-formed pieces
@@ -1120,11 +1140,40 @@ do
 end
 
 do
+    -- Piece 1 disagrees with the rest of the grid on rotation_step (1 vs 0).
+    -- A puzzle where all pieces share one non-zero rotation_step is now a
+    -- valid solve (see rotated cases below) -- what must still fail is
+    -- pieces *disagreeing* on rotation.
     local pieces = build_assembled_pieces(0, 0)
     pieces[1].rotation_step = 1
     assert(JigsawSolver.is_assembled(pieces, 9) == false,
-        "is_assembled should be false when any piece has a non-zero rotation_step")
-    print("PASS: jigsaw_solver: is_assembled() is false when a piece is rotated")
+        "is_assembled should be false when pieces disagree on rotation_step")
+    print("PASS: jigsaw_solver: is_assembled() is false when pieces disagree on rotation_step")
+end
+
+do
+    for k = 1, 3 do
+        local pieces = build_rotated_assembled_pieces(k, 0, 0)
+        assert(JigsawSolver.is_assembled(pieces, 9) == true,
+            "is_assembled should be true for a puzzle uniformly rotated to rotation_step=" .. k ..
+            " and arranged per that rotation's grid mapping")
+    end
+    print("PASS: jigsaw_solver: is_assembled() is true when the whole puzzle is solved rotated as a rigid unit (k=1,2,3)")
+end
+
+do
+    for k = 1, 3 do
+        -- Every piece shares rotation_step=k, but positions are laid out
+        -- with the *unrotated* (k=0) mapping -- rotation and layout disagree.
+        local pieces = build_assembled_pieces(0, 0)
+        for _, piece in ipairs(pieces) do
+            piece.rotation_step = k
+        end
+        assert(JigsawSolver.is_assembled(pieces, 9) == false,
+            "is_assembled should be false when rotation_step=" .. k ..
+            " but the layout still uses the unrotated grid mapping")
+    end
+    print("PASS: jigsaw_solver: is_assembled() is false when a shared rotation_step and the layout mapping disagree")
 end
 
 do
@@ -1141,6 +1190,18 @@ do
 end
 
 do
+    -- Same swap check, but at a shared non-zero rotation_step -- rotation-
+    -- aware position comparison must still catch swapped pieces.
+    local pieces = build_rotated_assembled_pieces(1, 0, 0)
+    local ax, ay = pieces[1].sprite.x, pieces[1].sprite.y
+    pieces[1].sprite.x, pieces[1].sprite.y = pieces[2].sprite.x, pieces[2].sprite.y
+    pieces[2].sprite.x, pieces[2].sprite.y = ax, ay
+    assert(JigsawSolver.is_assembled(pieces, 9) == false,
+        "is_assembled should be false when two pieces' positions are swapped, even under a shared rotation_step")
+    print("PASS: jigsaw_solver: is_assembled() is false when two pieces' positions are swapped under rotation_step=1")
+end
+
+do
     local pieces_origin  = build_assembled_pieces(0, 0)
     local pieces_shifted = build_assembled_pieces(3, 3)
     assert(JigsawSolver.is_assembled(pieces_origin, 9) == true,
@@ -1150,8 +1211,24 @@ do
     print("PASS: jigsaw_solver: is_assembled() is true regardless of the puzzle's absolute world position")
 end
 
+do
+    -- Same offset-invariance check, but at a shared non-zero rotation_step --
+    -- the puzzle's absolute world position must still be irrelevant once
+    -- rotated as a rigid unit.
+    local pieces_origin  = build_rotated_assembled_pieces(1, 0, 0)
+    local pieces_shifted = build_rotated_assembled_pieces(1, 3, 3)
+    assert(JigsawSolver.is_assembled(pieces_origin, 9) == true,
+        "is_assembled should be true for a rotated puzzle at the world origin")
+    assert(JigsawSolver.is_assembled(pieces_shifted, 9) == true,
+        "is_assembled should be true for a rotated puzzle shifted by a constant offset")
+    print("PASS: jigsaw_solver: is_assembled() is true regardless of world position for a rotated (rotation_step=1) puzzle")
+end
+
 -- integration: assembling the puzzle vanishes pieces, then removes them ---
 -- from both gs.pieces and the Drawer once their fade completes (GameScene) -
+-- Note: solving-while-rotated (a uniform rotation_step of 1/2/3) is covered
+-- at the unit level above; the integration tests below stay at
+-- rotation_step = 0 throughout and are not duplicated per rotation step.
 
 do
     GameState:reset()

@@ -70,6 +70,7 @@ function GameScene:on_enter()
             image = box.image,
             cols = box.cols,
             rows = box.rows,
+            tier = box.tier,
         }
         GameState:puzzle_started()
     end
@@ -111,6 +112,7 @@ function GameScene:_spawn_box()
                 image = box.image,
                 cols = box.cols,
                 rows = box.rows,
+                tier = box.tier,
             }
             GameState:puzzle_started()
             return
@@ -143,7 +145,7 @@ function GameScene:update(dt)
     for _, entry in ipairs(self.active_puzzles) do
         if not entry.solved and JigsawSolver.is_assembled(entry.pieces, entry.piece_count) then
             entry.solved = true
-            GameState:puzzle_solved()
+            GameState:puzzle_solved(entry.tier)
             for _, piece in ipairs(entry.pieces) do
                 piece:start_vanish()
             end

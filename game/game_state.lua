@@ -8,11 +8,16 @@ GameState.__index = GameState
 -- Cap on simultaneously active puzzles in the world; see can_start_puzzle.
 GameState.MAX_ACTIVE_PUZZLES = 3
 
+-- Number of a tier's puzzles that must be solved before the next tier
+-- unlocks; see is_tier_unlocked.
+GameState.UNLOCK_THRESHOLD = 3
+
 function GameState.new()
     local self = setmetatable({}, GameState)
     self.seen = {easy = {}, med = {}, hard = {}}
     self.solved_count = 0
     self.active_count = 0
+    self.solved_by_tier = {easy = 0, med = 0, hard = 0}
     return self
 end
 
@@ -53,14 +58,28 @@ end
 
 -- Called exactly once per puzzle, the instant its arrangement is first
 -- detected as correct (not when its pieces finish fading).
-function GameState:puzzle_solved()
+function GameState:puzzle_solved(tier)
     self.solved_count = self.solved_count + 1
     self.active_count = self.active_count - 1
+    self.solved_by_tier[tier] = self.solved_by_tier[tier] + 1
 end
 
 -- Returns true iff another puzzle can be started without exceeding the cap.
 function GameState:can_start_puzzle()
     return self.active_count < GameState.MAX_ACTIVE_PUZZLES
+end
+
+-- Returns true iff `tier`'s puzzles are available for selection. "easy" is
+-- always unlocked; "med" unlocks once UNLOCK_THRESHOLD "easy" puzzles have
+-- been solved; "hard" unlocks once UNLOCK_THRESHOLD "med" puzzles have.
+function GameState:is_tier_unlocked(tier)
+    if tier == "easy" then
+        return true
+    elseif tier == "med" then
+        return self.solved_by_tier.easy >= GameState.UNLOCK_THRESHOLD
+    elseif tier == "hard" then
+        return self.solved_by_tier.med >= GameState.UNLOCK_THRESHOLD
+    end
 end
 
 -- Clears all seen-state back to empty. Nothing in game-runtime code calls
@@ -70,6 +89,7 @@ function GameState:reset()
     self.seen = {easy = {}, med = {}, hard = {}}
     self.solved_count = 0
     self.active_count = 0
+    self.solved_by_tier = {easy = 0, med = 0, hard = 0}
 end
 
 -- Module returns a singleton instance (not the class table) so existing

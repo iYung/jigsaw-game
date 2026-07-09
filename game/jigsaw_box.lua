@@ -11,9 +11,11 @@ function JigsawBox.new(x, y, world_w, world_h)
     local by_tier = PuzzleCatalog.list_by_tier()
     local pool = {}
     for tier, paths in pairs(by_tier) do
-        local unseen = GameState:unseen_paths(tier, paths)
-        for _, path in ipairs(unseen) do
-            pool[#pool + 1] = {path = path, tier = tier}
+        if GameState:is_tier_unlocked(tier) then
+            local unseen = GameState:unseen_paths(tier, paths)
+            for _, path in ipairs(unseen) do
+                pool[#pool + 1] = {path = path, tier = tier}
+            end
         end
     end
 
@@ -26,6 +28,7 @@ function JigsawBox.new(x, y, world_w, world_h)
     GameState:mark_seen(chosen.tier, path)
 
     local self = setmetatable({}, JigsawBox)
+    self.tier = chosen.tier
     self.sprite = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.color = {1, 0.75, 0.2, 1}
     self.state = "waiting"

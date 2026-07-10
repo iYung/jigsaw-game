@@ -61,8 +61,21 @@ function love.draw()
     love.graphics.draw(canvas, ox, oy, 0, scale, scale)
 end
 
+local function _save_current()
+    if manager.current and manager.current.to_save then
+        Save.write({ game_state = GameState:to_save(), scene = manager.current:to_save() })
+    end
+end
+
 function love.keypressed(key)
-    if key == "escape" then love.event.quit() end
+    if key == "escape" then
+        if manager.current and manager.current.to_save then
+            _save_current()
+            manager:switch(StartScene.new(manager))
+        else
+            love.event.quit()
+        end
+    end
 end
 
 function love.mousemoved(x, y, ...)
@@ -78,7 +91,5 @@ function love.mousepressed(x, y, button, ...)
 end
 
 function love.quit()
-    if manager.current and manager.current.to_save then
-        Save.write({ game_state = GameState:to_save(), scene = manager.current:to_save() })
-    end
+    _save_current()
 end

@@ -9,7 +9,7 @@ The game boots into a **start menu** — **New Game**, **Continue**, and **Exit 
 - **WASD** — move the player
 - **E** — interact: open the piece box, or pick up / drop a jigsaw piece
 - **R** — rotate held piece 90°
-- **ESC** — quit
+- **ESC** — in-game, saves and returns to the start menu; at the start menu, quits
 
 The world starts with a gold **box** near the player. Press **E** next to it and the box disappears instantly, while the jigsaw pieces (a grid slice of a puzzle image — see `assets/puzzles/`, picked uniformly at random from whichever images haven't been shown yet this session) continue to eject one by one in the background, in shuffled order and with a random initial rotation, into adjacent slots. Dropped pieces snap to the 64px (2U) world grid. While carrying a piece, a faint ghost copy of it is drawn on the ground at the spot it would land if dropped right now, so you can preview the drop location before committing. When not carrying a piece, the grid cell the player is currently standing over is highlighted with a faint white fill instead, so the same drop-target feedback is visible at all times. Once all pieces are correctly arranged relative to each other (one shared rotation across every piece — upright, 90°, 180°, or 270° — and right relative position under that rotation, anywhere in the world, not just next to the box), the pieces fade out and disappear.
 

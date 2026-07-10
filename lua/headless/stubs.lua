@@ -55,6 +55,8 @@ graphics_stub.getFont          = function() return {} end
 
 -- Global screen dimension query (not the stub-image version).
 graphics_stub.getDimensions = function() return 1280, 720 end
+graphics_stub.getWidth      = function() return 1280 end
+graphics_stub.getHeight     = function() return 720 end
 
 -- Catch-all: any unknown key returns a no-op, except new* returns a factory.
 setmetatable(graphics_stub, {

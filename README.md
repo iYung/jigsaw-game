@@ -4,6 +4,8 @@ A 2D jigsaw puzzle game built with Love2D.
 
 ## Gameplay
 
+The game boots into a **start menu** — **New Game** and **Exit Game**. Navigate with **W/S** or the arrow keys, confirm with **E** or Enter, or just hover and click with the mouse. Choosing New Game fades into the world below.
+
 - **WASD** — move the player
 - **E** — interact: open the piece box, or pick up / drop a jigsaw piece
 - **R** — rotate held piece 90°
@@ -25,7 +27,8 @@ game/           Game-specific code
   jigsaw_piece.lua JigsawPiece entity (pickup, rotate, drop with grid snap; optional image+quad visual; fade-out "vanishing" state on solve; draw_ghost() faint drop-location preview; pieces render with square corners — no shader — throughout their lifetime)
   jigsaw_solver.lua Puzzle-completion check (is_assembled(pieces, expected_count)) — true when exactly expected_count pieces all share one rotation_step (0-3) and are in correct relative arrangement under that rotation, regardless of absolute world position; checked per-box (GameScene:active_puzzles) so differently-sized/simultaneous puzzles solve independently
   player.lua      Player movement and piece interaction (64x64 sprite, matches piece/grid size)
-  scenes/         GameScene
+  scenes/         GameScene, StartScene
+    start_scene.lua Start menu shown on launch — "New Game"/"Exit Game", drawn as plain solid-color rectangles + text (no art/sound assets, unlike ../wip's start screen); owns its own lua/core/input.lua instance (W/S or arrows to navigate, E or Enter to confirm, wrapping between the two items) plus mousemoved/mousepressed handlers (forwarded from main.lua) that convert raw window coordinates into the 1280x720 logical canvas space to hover/click items; New Game switches the SceneManager to a fresh GameScene, Exit Game calls love.event.quit()
 lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite (optional quad sub-rectangle drawing), etc.
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
 tests/          Test files — run with: love . --headless

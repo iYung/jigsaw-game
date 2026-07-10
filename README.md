@@ -57,6 +57,12 @@ bash scripts/build_web.sh   # outputs to web/
 
 `APP_TITLE` env var overrides the browser tab title (default: `"Love Exemplar"`).
 
+The web build's on-screen controls include a ⌨/🎮 toggle that switches
+between touch-keyboard buttons and a simulated gamepad (a fake
+`navigator.getGamepads()` device driven by the on-screen D-pad/A/X buttons).
+This lets you smoke-test controller support in any browser without a
+physical controller plugged in.
+
 ## CI / Cloudflare Pages
 
 Two GitHub Actions workflows are included:

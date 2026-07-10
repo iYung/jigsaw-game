@@ -285,9 +285,18 @@ function GameScene:draw()
     Scene.draw(self)
 
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("WASD: move   E: pick up / drop   R: rotate   ESC: quit", 16, 16)
+    love.graphics.print("WASD: move   E: pick up / drop   R: rotate   ESC: save & menu", 16, 16)
     local c = self.player:centre()
     love.graphics.print(string.format("player (%.0f, %.0f)", c.x, c.y), 16, 36)
+end
+
+-- Forwards to Scene:on_exit() (clears self.drawer) -- GameScene doesn't chain
+-- its metatable to Scene, so without this override, SceneManager:switch's
+-- `self._prev:on_exit()` call fails outright once something can actually
+-- switch away from a live GameScene (previously only possible by quitting
+-- the whole app, which never went through SceneManager).
+function GameScene:on_exit()
+    Scene.on_exit(self)
 end
 
 -- Moves a fully-faded (or, per GameScene:to_save(), forcibly-collapsed)

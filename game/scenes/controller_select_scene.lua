@@ -38,6 +38,8 @@ function ControllerSelectScene.new(manager, save_data)
     self.escape_to_menu = true
     self.p1_device = nil
     self.p2_device = nil
+    self.p1_confirmed = false
+    self.p2_confirmed = false
     return self
 end
 
@@ -90,19 +92,47 @@ function ControllerSelectScene:update(dt)
     end
 
     for _, source in ipairs(self._sources) do
-        if source.input:pressed("left") and not devices_equal(source.device, self.p2_device) then
-            self.p1_device = source.device
+        if source.input:pressed("left") then
+            if devices_equal(source.device, self.p1_device) then
+                -- Pressing your own claim's direction again releases it,
+                -- rather than being a silent no-op -- otherwise a claimed
+                -- device has no way to back out without a different device
+                -- stealing the slot out from under it.
+                self.p1_device = nil
+                self.p1_confirmed = false
+            elseif not devices_equal(source.device, self.p2_device) then
+                self.p1_device = source.device
+                self.p1_confirmed = false
+            end
         end
-        if source.input:pressed("right") and not devices_equal(source.device, self.p1_device) then
-            self.p2_device = source.device
+        if source.input:pressed("right") then
+            if devices_equal(source.device, self.p2_device) then
+                self.p2_device = nil
+                self.p2_confirmed = false
+            elseif not devices_equal(source.device, self.p1_device) then
+                self.p2_device = source.device
+                self.p2_confirmed = false
+            end
         end
     end
 
+    -- Each player readies up independently -- only the device actually
+    -- claiming a slot can set that slot's confirmed flag, so one player
+    -- mashing confirm can never start the game before the other player has
+    -- also confirmed.
     for _, source in ipairs(self._sources) do
-        if source.input:pressed("confirm") and self.p1_device and self.p2_device then
-            self:_confirm()
-            break
+        if source.input:pressed("confirm") then
+            if devices_equal(source.device, self.p1_device) then
+                self.p1_confirmed = true
+            end
+            if devices_equal(source.device, self.p2_device) then
+                self.p2_confirmed = true
+            end
         end
+    end
+
+    if self.p1_device and self.p2_device and self.p1_confirmed and self.p2_confirmed then
+        self:_confirm()
     end
 end
 
@@ -132,6 +162,9 @@ function ControllerSelectScene:draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Player 1", left_x, COLUMN_TOP + 20, COLUMN_W, "center")
     love.graphics.printf(_label_for(self.p1_device, self._sources), left_x, COLUMN_TOP + 60, COLUMN_W, "center")
+    if self.p1_device then
+        love.graphics.printf(self.p1_confirmed and "Ready!" or "press Confirm", left_x, COLUMN_TOP + 100, COLUMN_W, "center")
+    end
 
     -- Middle legend column
     love.graphics.setColor(SELECTED_COLOR)
@@ -148,10 +181,13 @@ function ControllerSelectScene:draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Player 2", right_x, COLUMN_TOP + 20, COLUMN_W, "center")
     love.graphics.printf(_label_for(self.p2_device, self._sources), right_x, COLUMN_TOP + 60, COLUMN_W, "center")
+    if self.p2_device then
+        love.graphics.printf(self.p2_confirmed and "Ready!" or "press Confirm", right_x, COLUMN_TOP + 100, COLUMN_W, "center")
+    end
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf(
-        "P1: press Left to claim   P2: press Right to claim   Confirm to start",
+        "P1: Left to claim/release   P2: Right to claim/release   Confirm to ready up (both required to start)",
         0, COLUMN_TOP + COLUMN_H + 40, LOGICAL_W, "center"
     )
 end

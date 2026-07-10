@@ -148,10 +148,38 @@ do
     end)
 end
 
+-- Test 3b: a device can release its own claim by pressing its own direction
+-- again (unclaim), rather than being stuck once claimed -- a different
+-- device can then freely claim the now-empty slot.
+do
+    local c1_buttons = {}
+    with_joysticks({ fake_stick(c1_buttons) }, function()
+        local scene = ControllerSelectScene.new({})
+        scene:on_enter()
+
+        tap_key(scene, "a") -- keyboard claims p1 via "left"
+        assert(scene.p1_device ~= nil and scene.p1_device.type == "keyboard",
+            "sanity: keyboard should have claimed p1_device")
+
+        tap_key(scene, "a") -- keyboard presses "left" again
+        assert(scene.p1_device == nil,
+            "keyboard pressing left again while already p1 should release its own claim, not re-claim/no-op")
+
+        -- The slot is free again -- a different device can claim it.
+        tap_button(scene, c1_buttons, "dpleft")
+        assert(scene.p1_device ~= nil and scene.p1_device.type == "gamepad" and scene.p1_device.index == 1,
+            "after keyboard releases p1, controller 1 pressing left should claim it")
+
+        print("PASS: controller_select_scene: pressing your own claim's direction again releases it instead of being stuck")
+    end)
+end
+
 -- Test 4: confirm gating -- manager:switch is never called while either
--- p1_device or p2_device is nil; once both are set, confirm calls
--- manager:switch with a GameScene-shaped argument (duck-typed via
--- .camera/.drawer, matching tests/test_start_scene.lua's convention).
+-- p1_device or p2_device is nil, or while either player hasn't individually
+-- confirmed; only once BOTH devices are claimed AND both have pressed
+-- confirm does manager:switch fire, with a GameScene-shaped argument
+-- (duck-typed via .camera/.drawer, matching tests/test_start_scene.lua's
+-- convention). One player mashing confirm alone must never be enough.
 do
     local switched_with = nil
     local manager = {
@@ -174,6 +202,7 @@ do
 
         tap_key(scene, "return")
         assert(switched_with == nil, "confirm with only p1_device claimed should not call manager:switch")
+        assert(scene.p1_confirmed == true, "keyboard confirming should set p1_confirmed, since keyboard is p1_device")
 
         -- Claim p2 with a *different* device (controller 1, right) -- a
         -- device already claimed by one player is rejected for the other
@@ -182,12 +211,65 @@ do
         tap_button(scene, c1_buttons, "dpright")
         assert(scene.p2_device ~= nil, "sanity: p2_device should now be claimed")
 
+        -- Both devices claimed, but only P1 has confirmed so far -- must
+        -- still be a no-op even though a naive "both claimed" check would
+        -- pass; P2's device has not confirmed yet.
+        assert(switched_with == nil, "both claimed but only P1 confirmed should not call manager:switch")
+
+        -- P1 (keyboard) confirming again should not fake out P2's requirement.
         tap_key(scene, "return")
-        assert(switched_with ~= nil, "confirm with both devices claimed should call manager:switch")
+        assert(switched_with == nil, "P1 alone re-confirming must not substitute for P2's own confirm")
+
+        -- Now P2 (controller 1) confirms -- both have now individually
+        -- confirmed, so the game should start.
+        tap_button(scene, c1_buttons, "a")
+        assert(switched_with ~= nil, "confirm from both devices individually should call manager:switch")
         assert(switched_with.camera ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .camera)")
         assert(switched_with.drawer ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .drawer)")
 
-        print("PASS: controller_select_scene: manager:switch fires only once both devices are claimed, with a GameScene-shaped arg")
+        print("PASS: controller_select_scene: manager:switch fires only once both devices are claimed AND both have individually confirmed")
+    end)
+end
+
+-- Test 4b: claiming a slot (or losing it to another device, or releasing it
+-- yourself) resets that slot's confirmed flag -- a stale "ready" from a
+-- previous device/claim must never carry over.
+do
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local c1_buttons = {}
+
+    with_joysticks({ fake_stick(c1_buttons) }, function()
+        local scene = ControllerSelectScene.new(manager)
+        scene:on_enter()
+
+        tap_key(scene, "a") -- keyboard claims p1
+        tap_button(scene, c1_buttons, "dpright") -- controller 1 claims p2
+        tap_key(scene, "return") -- keyboard (p1) confirms
+        assert(scene.p1_confirmed == true, "sanity: p1 should be confirmed")
+        assert(switched_with == nil, "sanity: should not have switched yet (p2 hasn't confirmed)")
+
+        -- Controller 1 releases its own p2 claim (pressing its own
+        -- direction again) -- p2_device goes back to nil.
+        tap_button(scene, c1_buttons, "dpright")
+        assert(scene.p2_device == nil, "controller 1 pressing right again while already p2 should release its claim")
+
+        -- Keyboard now releases its own p1 claim the same way.
+        tap_key(scene, "a")
+        assert(scene.p1_device == nil, "keyboard pressing left again while already p1 should release its claim")
+        assert(scene.p1_confirmed == false, "releasing p1's claim should reset p1_confirmed")
+
+        -- Re-claim p1 with keyboard -- must start unconfirmed again, not
+        -- inherit the earlier confirmed state.
+        tap_key(scene, "a")
+        assert(scene.p1_device ~= nil, "sanity: keyboard should have re-claimed p1")
+        assert(scene.p1_confirmed == false, "re-claiming p1 should not inherit a stale confirmed flag")
+
+        assert(switched_with == nil, "manager:switch should never have fired during this claim/release/reclaim sequence")
+
+        print("PASS: controller_select_scene: releasing or re-claiming a slot resets that slot's confirmed flag")
     end)
 end
 

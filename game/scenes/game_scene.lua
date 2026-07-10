@@ -5,7 +5,6 @@ local Player     = require("game/player")
 local C          = require("game/constants")
 local JigsawBox  = require("game/jigsaw_box")
 local JigsawSolver = require("game/jigsaw_solver")
-local SpawnButton = require("game/spawn_button")
 local PuzzlePile = require("game/puzzle_pile")
 local GameState  = require("game/game_state")
 
@@ -86,10 +85,7 @@ function GameScene:on_enter()
         GameState:puzzle_started()
     end
 
-    self.spawn_button = SpawnButton.new(0, 0, function() self:_spawn_box() end)
-    self.drawer:add(self.spawn_button, C.PRIORITY_PIECE)
-
-    self.pile = PuzzlePile.new(WORLD_W / 2, 0)
+    self.pile = PuzzlePile.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
     self.drawer:add(self.pile, C.PRIORITY_PIECE)
 end
 
@@ -109,9 +105,6 @@ function GameScene:_spawn_box()
                 occupied = true
                 break
             end
-        end
-        if not occupied and self.spawn_button.sprite.x == cx and self.spawn_button.sprite.y == cy then
-            occupied = true
         end
         if not occupied and self.pile.sprite.x == cx and self.pile.sprite.y == cy then
             occupied = true
@@ -158,7 +151,7 @@ function GameScene:update(dt)
         end
     end
 
-    self.player:update(dt, self.pieces, self.boxes, self.spawn_button, self.drawer)
+    self.player:update(dt, self.pieces, self.boxes, self.pile, self.drawer)
 
     for _, entry in ipairs(self.active_puzzles) do
         if not entry.solved and JigsawSolver.is_assembled(entry.pieces, entry.piece_count) then

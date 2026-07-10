@@ -3,14 +3,15 @@ local C = require("game/constants")
 local GameState = require("game/game_state")
 local PuzzleCatalog = require("game/puzzle_catalog")
 
--- Visual-only, no interact() -- same role game/door.lua used to play as a
--- grid-aligned world object marking where new boxes fly in from, but drawn
--- as a stack of small boxes (one per puzzle still left to see this session)
--- instead of one flat tile.
+-- Same role game/door.lua used to play as a grid-aligned world object
+-- marking where new boxes fly in from, but drawn as a stack of small boxes
+-- (one per puzzle still left to see this session) instead of one flat tile.
+-- Also the player's spawn-a-box interact target (see :interact()), taking
+-- over that role from the now-retired game/spawn_button.lua.
 local PuzzlePile = {}
 PuzzlePile.__index = PuzzlePile
 
-function PuzzlePile.new(x, y)
+function PuzzlePile.new(x, y, on_press)
     local self = setmetatable({}, PuzzlePile)
     -- Base footprint sprite: same role the door's sprite played for
     -- occupancy checks in game_scene.lua's _spawn_box (blocks this grid
@@ -18,7 +19,18 @@ function PuzzlePile.new(x, y)
     -- the stack itself is drawn in :draw(), not via Sprite:draw().
     self.sprite = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.visible = false
+    self.on_press = on_press
     return self
+end
+
+function PuzzlePile:interact()
+    if self.on_press then
+        self.on_press()
+    end
+end
+
+function PuzzlePile:centre()
+    return {x = self.sprite.x + C.U, y = self.sprite.y + C.U}
 end
 
 -- Fully derived from GameState + PuzzleCatalog on every call -- no

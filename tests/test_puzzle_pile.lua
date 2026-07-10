@@ -173,3 +173,85 @@ do
         tostring(pos_at_0.y))
     print("PASS: puzzle_pile: top_position() at count()==0 returns the same position as count()==1 (math.max(n, 1) floor)")
 end
+
+-- PuzzlePile:interact() --------------------------------------------------------
+
+-- interact() invokes on_press exactly once per call, mirroring the old
+-- spawn_button "interact() invokes on_press exactly once per call" test, now
+-- driven through PuzzlePile.new(x, y, on_press)'s third arg.
+
+do
+    local calls = 0
+    local pile = PuzzlePile.new(0, 0, function() calls = calls + 1 end)
+
+    pile:interact()
+    assert(calls == 1, "on_press should be invoked once after first interact(), got " .. calls)
+
+    pile:interact()
+    assert(calls == 2, "on_press should be invoked once more after second interact(), got " .. calls)
+    print("PASS: puzzle_pile: interact() invokes on_press exactly once per call")
+end
+
+-- PuzzlePile:centre() ----------------------------------------------------------
+
+-- Mirrors the old spawn_button "centre() returns sprite center" test.
+
+do
+    local pile = PuzzlePile.new(320, 640, function() end)
+    local c = pile:centre()
+    assert(c.x == 320 + C.U, "centre.x should be x + U = " .. (320 + C.U) .. ", got " .. tostring(c.x))
+    assert(c.y == 640 + C.U, "centre.y should be y + U = " .. (640 + C.U) .. ", got " .. tostring(c.y))
+    print("PASS: puzzle_pile: centre() returns sprite center")
+end
+
+-- Player:update() prioritizes box interaction over pile interaction ----------
+
+-- Mirrors the box-vs-button priority test previously in test_jigsaw.lua: a
+-- nearby waiting box still wins over the pile when both are in interact
+-- range on the same press.
+
+do
+    local Player       = require("game/player")
+    local HeadlessInput = require("lua/headless/input")
+    local JigsawBoxMod = require("game/jigsaw_box")
+
+    local player = Player.new(0, 0)
+    player.input = HeadlessInput.new()
+    -- player:centre() == (32, 32)
+
+    local presses = 0
+    local pile = PuzzlePile.new(0, 0, function() presses = presses + 1 end)  -- centre (32, 32)
+    GameState:reset()
+    local box = JigsawBoxMod.new(0, 0)                                      -- centre (32, 32)
+
+    player.input:press("interact")
+    player:update(1 / 60, {}, { box }, pile, nil)
+
+    assert(box.state == "ejecting", "box should be interacted with when both box and pile are in range")
+    assert(presses == 0,
+        "pile:interact() should NOT fire when a box interaction already happened this press, got " .. presses .. " presses")
+    print("PASS: player: update() prioritizes box interaction over pile interaction when both are in range")
+end
+
+-- ...and pile:interact() still fires when no piece/box is in range but the --
+-- pile is (mirrors the old spawn_button "no piece/box in range" test) -------
+
+do
+    local Player       = require("game/player")
+    local HeadlessInput = require("lua/headless/input")
+
+    local player = Player.new(0, 0)
+    player.input = HeadlessInput.new()
+    -- player:centre() == (32, 32)
+
+    local presses = 0
+    local pile = PuzzlePile.new(0, 0, function() presses = presses + 1 end)
+    -- pile:centre() == (32, 32), dist 0, well within 1.5*C.U
+
+    player.input:press("interact")
+    player:update(1 / 60, {}, {}, pile, nil)
+
+    assert(presses == 1,
+        "pile:interact() should fire when no piece/box is in range but the pile is, got " .. presses .. " presses")
+    print("PASS: player: update() calls pile:interact() when no piece/box is in range but the pile is")
+end

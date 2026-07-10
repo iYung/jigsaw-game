@@ -18,6 +18,17 @@ function Player.new(x, y)
         right        = { "d", "right" },
         interact     = { "e" },
         rotate_piece = { "r" },
+    }, {
+        gamepad_buttons = {
+            up           = { "dpup" },
+            down         = { "dpdown" },
+            left         = { "dpleft" },
+            right        = { "dpright" },
+            interact     = { "a" },
+            rotate_piece = { "x" },
+        },
+        use_left_stick = true,
+        joystick_scope = "first_two",
     })
     self.held_piece = nil
     return self

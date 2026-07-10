@@ -27,6 +27,13 @@ function StartScene.new(manager)
         up      = { "w", "up" },
         down    = { "s", "down" },
         confirm = { "e", "return" },
+    }, {
+        gamepad_buttons = {
+            up      = { "dpup" },
+            down    = { "dpdown" },
+            confirm = { "a" },
+        },
+        joystick_scope = "first_two",
     })
     return self
 end

@@ -198,3 +198,135 @@ do
         "solved_by_tier.hard should be 0 after reset(), got " .. tostring(GameState.solved_by_tier.hard))
     print("PASS: game_state: reset() clears solved_by_tier back to {easy=0, med=0, hard=0}")
 end
+
+-- to_save() reports version == 1 and mirrors the live singleton's fields ----
+
+do
+    GameState:reset()
+    GameState:mark_seen("easy", "assets/puzzles/easy/1.png")
+    GameState:puzzle_started()
+    GameState:puzzle_started()
+    GameState:puzzle_solved("easy")
+
+    local saved = GameState:to_save()
+    assert(saved.version == 1,
+        "to_save() should report version == 1, got " .. tostring(saved.version))
+    assert(saved.solved_count == GameState.solved_count,
+        "to_save().solved_count should match the live singleton's solved_count, got " ..
+        tostring(saved.solved_count) .. " vs " .. tostring(GameState.solved_count))
+    assert(saved.active_count == GameState.active_count,
+        "to_save().active_count should match the live singleton's active_count, got " ..
+        tostring(saved.active_count) .. " vs " .. tostring(GameState.active_count))
+    assert(saved.solved_by_tier.easy == GameState.solved_by_tier.easy
+        and saved.solved_by_tier.med == GameState.solved_by_tier.med
+        and saved.solved_by_tier.hard == GameState.solved_by_tier.hard,
+        "to_save().solved_by_tier should match the live singleton's solved_by_tier per tier")
+    assert(saved.seen.easy["assets/puzzles/easy/1.png"] == true,
+        "to_save().seen should reflect paths already marked seen on the live singleton")
+    print("PASS: game_state: to_save() returns version == 1 and matches the live singleton's current fields")
+end
+
+-- to_save() is a shallow snapshot: seen/solved_by_tier are the SAME tables --
+
+do
+    GameState:reset()
+    GameState:mark_seen("easy", "assets/puzzles/easy/1.png")
+    GameState:puzzle_solved("easy")
+
+    local saved = GameState:to_save()
+    assert(saved.seen == GameState.seen,
+        "to_save().seen should be the same table reference as GameState.seen (shallow snapshot), got a different table")
+    assert(saved.solved_by_tier == GameState.solved_by_tier,
+        "to_save().solved_by_tier should be the same table reference as GameState.solved_by_tier (shallow snapshot), got a different table")
+    print("PASS: game_state: to_save() returns the same seen/solved_by_tier table references as the live singleton (shallow, not a deep copy)")
+end
+
+-- apply_save() mutates the existing singleton in place, never replaces it --
+
+do
+    GameState:reset()
+    local ref = GameState
+    GameState:apply_save({
+        version = 1,
+        seen = {easy = {}, med = {}, hard = {}},
+        solved_count = 0,
+        active_count = 0,
+        solved_by_tier = {easy = 0, med = 0, hard = 0},
+    })
+    assert(GameState == ref,
+        "apply_save() should mutate the existing GameState singleton in place, not replace it, got a different table identity")
+    print("PASS: game_state: apply_save() mutates the existing singleton table in place rather than replacing it")
+end
+
+-- apply_save(data) restores solved_count/active_count/solved_by_tier/seen --
+
+do
+    GameState:reset()
+    local data = {
+        version = 1,
+        seen = {easy = {["assets/puzzles/easy/2.png"] = true}, med = {}, hard = {}},
+        solved_count = 5,
+        active_count = 2,
+        solved_by_tier = {easy = 3, med = 2, hard = 0},
+    }
+
+    GameState:apply_save(data)
+    assert(GameState.solved_count == 5,
+        "apply_save() should restore solved_count == 5, got " .. tostring(GameState.solved_count))
+    assert(GameState.active_count == 2,
+        "apply_save() should restore active_count == 2, got " .. tostring(GameState.active_count))
+    assert(GameState.solved_by_tier.easy == 3 and GameState.solved_by_tier.med == 2 and GameState.solved_by_tier.hard == 0,
+        "apply_save() should restore solved_by_tier per tier, got easy=" .. tostring(GameState.solved_by_tier.easy) ..
+        " med=" .. tostring(GameState.solved_by_tier.med) .. " hard=" .. tostring(GameState.solved_by_tier.hard))
+    assert(GameState:is_seen("easy", "assets/puzzles/easy/2.png") == true,
+        "apply_save() should restore seen such that is_seen() reflects the restored data, got false")
+    assert(GameState:is_seen("easy", "assets/puzzles/easy/1.png") == false,
+        "apply_save() should not report a path as seen unless the restored seen table actually marks it, got true")
+    print("PASS: game_state: apply_save(data) restores solved_count/active_count/solved_by_tier/seen, reflected by is_seen()")
+end
+
+-- apply_save(nil) and apply_save({version mismatch}) fall back to reset() --
+
+do
+    GameState:reset()
+    GameState:mark_seen("easy", "assets/puzzles/easy/1.png")
+    GameState:puzzle_started()
+    GameState:puzzle_solved("easy")
+    assert(GameState.solved_count ~= 0 or GameState.active_count ~= 0,
+        "test setup should have driven at least one counter non-zero before apply_save(nil)")
+
+    GameState:apply_save(nil)
+    assert(GameState.solved_count == 0,
+        "apply_save(nil) should fall back to a freshly-reset state, got solved_count=" .. tostring(GameState.solved_count))
+    assert(GameState.active_count == 0,
+        "apply_save(nil) should fall back to a freshly-reset state, got active_count=" .. tostring(GameState.active_count))
+    assert(GameState.solved_by_tier.easy == 0 and GameState.solved_by_tier.med == 0 and GameState.solved_by_tier.hard == 0,
+        "apply_save(nil) should zero out solved_by_tier, got easy=" .. tostring(GameState.solved_by_tier.easy) ..
+        " med=" .. tostring(GameState.solved_by_tier.med) .. " hard=" .. tostring(GameState.solved_by_tier.hard))
+    assert(GameState:is_seen("easy", "assets/puzzles/easy/1.png") == false,
+        "apply_save(nil) should clear previously-marked seen paths, got is_seen() == true")
+
+    GameState:mark_seen("easy", "assets/puzzles/easy/1.png")
+    GameState:puzzle_started()
+    GameState:puzzle_solved("easy")
+    assert(GameState.solved_count ~= 0 or GameState.active_count ~= 0,
+        "test setup should have driven at least one counter non-zero before apply_save({version mismatch})")
+
+    GameState:apply_save({
+        version = 2,
+        seen = {easy = {["should-not-apply.png"] = true}, med = {}, hard = {}},
+        solved_count = 99,
+        active_count = 99,
+        solved_by_tier = {easy = 99, med = 99, hard = 99},
+    })
+    assert(GameState.solved_count == 0,
+        "apply_save() with a mismatched version should fall back to reset(), not partially apply fields, got solved_count=" ..
+        tostring(GameState.solved_count))
+    assert(GameState.active_count == 0,
+        "apply_save() with a mismatched version should fall back to reset(), got active_count=" .. tostring(GameState.active_count))
+    assert(GameState.solved_by_tier.easy == 0 and GameState.solved_by_tier.med == 0 and GameState.solved_by_tier.hard == 0,
+        "apply_save() with a mismatched version should zero out solved_by_tier rather than applying the mismatched data's values")
+    assert(GameState:is_seen("easy", "should-not-apply.png") == false,
+        "apply_save() with a mismatched version should not apply the mismatched data's seen table, got is_seen() == true")
+    print("PASS: game_state: apply_save(nil) and apply_save({version mismatch}) both fall back to a freshly-reset state instead of erroring or partially applying fields")
+end

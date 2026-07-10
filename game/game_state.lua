@@ -1,7 +1,8 @@
 -- In-memory, per-tier "seen" set. Session-only: lives only for the
 -- process's lifetime, same lifetime pattern as PuzzleCatalog's cached_list.
--- Nothing here touches disk (no to_save/from_save, unlike ../wip's
--- GameState -- persistence is explicitly out of scope).
+-- to_save()/apply_save() below exist for the save/load feature, mirroring
+-- ../wip's GameState pattern -- everything else about this module (a
+-- session-lifetime singleton, no other persistence) stays the same.
 local GameState = {}
 GameState.__index = GameState
 
@@ -107,6 +108,38 @@ function GameState:reset()
     self.solved_count = 0
     self.active_count = 0
     self.solved_by_tier = {easy = 0, med = 0, hard = 0}
+end
+
+-- Returns a plain snapshot table of this singleton's persistable fields,
+-- suitable for handing to lua/core/save.lua's serializer. Shallow: seen/
+-- solved_by_tier are the same table references as the live singleton, not
+-- deep copies (the serializer is what produces an independent, disk-safe
+-- copy).
+function GameState:to_save()
+    return {
+        version = 1,
+        seen = self.seen,
+        solved_count = self.solved_count,
+        active_count = self.active_count,
+        solved_by_tier = self.solved_by_tier,
+    }
+end
+
+-- Restores previously-saved fields onto this singleton, mutating it in
+-- place (assigning into self.seen etc.) rather than replacing self itself,
+-- since every other module holds a reference to this exact singleton table
+-- via require("game/game_state") -- replacing self would leave those
+-- references stale. Falls back to a fresh reset() if data is missing or
+-- from an incompatible version.
+function GameState:apply_save(data)
+    if not data or data.version ~= 1 then
+        self:reset()
+        return
+    end
+    self.seen = data.seen
+    self.solved_count = data.solved_count
+    self.active_count = data.active_count
+    self.solved_by_tier = data.solved_by_tier
 end
 
 -- Module returns a singleton instance (not the class table) so existing

@@ -1,6 +1,8 @@
 local Scene     = require("lua/core/scene")
 local Input     = require("lua/core/input")
 local GameScene = require("game/scenes/game_scene")
+local Save      = require("lua/core/save")
+local GameState = require("game/game_state")
 
 local StartScene = {}
 StartScene.__index = StartScene
@@ -19,7 +21,7 @@ function StartScene.new(manager)
     local self = Scene.new(LOGICAL_W, LOGICAL_H)
     setmetatable(self, StartScene)
     self.manager  = manager
-    self.items    = { "New Game", "Exit Game" }
+    self.items    = { "New Game", "Continue", "Exit Game" }
     self.selected = 1
     self.input    = Input.new({
         up      = { "w", "up" },
@@ -50,7 +52,21 @@ function StartScene:_to_logical(x, y)
     return (x - ox) / scale, (y - oy) / scale
 end
 
-function StartScene:on_enter() end
+-- Advances `current` by `delta` (+1 for down, -1 for up), wrapping modulo
+-- `n`, but skipping index 2 ("Continue") whenever `has_save` is false --
+-- mirrors /root/wip/lua/game/scenes/start_scene.lua's _next_selectable.
+local function _next_selectable(current, delta, has_save, n)
+    local s = current
+    for _ = 1, n do
+        s = ((s - 1 + delta) % n) + 1
+        if s ~= 2 or has_save then return s end
+    end
+    return current
+end
+
+function StartScene:on_enter()
+    self._has_save = Save.exists()
+end
 
 function StartScene:on_exit() end
 
@@ -58,6 +74,12 @@ function StartScene:_confirm()
     if self.selected == 1 then
         self.manager:switch(GameScene.new())
     elseif self.selected == 2 then
+        if not self._has_save then return end
+        local data = Save.read()
+        if not data then return end
+        GameState:apply_save(data.game_state)
+        self.manager:switch(GameScene.new(data.scene))
+    elseif self.selected == 3 then
         love.event.quit()
     end
 end
@@ -66,10 +88,10 @@ function StartScene:update(dt)
     self.input:update()
 
     if self.input:pressed("down") then
-        self.selected = (self.selected % #self.items) + 1
+        self.selected = _next_selectable(self.selected, 1, self._has_save, #self.items)
     end
     if self.input:pressed("up") then
-        self.selected = ((self.selected - 2) % #self.items) + 1
+        self.selected = _next_selectable(self.selected, -1, self._has_save, #self.items)
     end
     if self.input:pressed("confirm") then
         self:_confirm()
@@ -82,15 +104,24 @@ function StartScene:draw()
 
     for i, label in ipairs(self.items) do
         local x, y, w, h = self:_item_rect(i)
-        if i == self.selected then
-            love.graphics.setColor(SELECTED_COLOR)
-        else
-            love.graphics.setColor(NORMAL_COLOR)
-        end
-        love.graphics.rectangle("fill", x, y, w, h)
+        if i == 2 and not self._has_save then
+            local r, g, b = NORMAL_COLOR[1], NORMAL_COLOR[2], NORMAL_COLOR[3]
+            love.graphics.setColor(r, g, b, 0.4)
+            love.graphics.rectangle("fill", x, y, w, h)
 
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.printf(label, x, y + h / 2 - 8, w, "center")
+            love.graphics.setColor(1, 1, 1, 0.4)
+            love.graphics.printf(label, x, y + h / 2 - 8, w, "center")
+        else
+            if i == self.selected then
+                love.graphics.setColor(SELECTED_COLOR)
+            else
+                love.graphics.setColor(NORMAL_COLOR)
+            end
+            love.graphics.rectangle("fill", x, y, w, h)
+
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.printf(label, x, y + h / 2 - 8, w, "center")
+        end
     end
 
     love.graphics.setColor(1, 1, 1, 1)

@@ -33,6 +33,78 @@ do
     print("PASS: jigsaw_piece: new() positions on ground with correct size")
 end
 
+-- JigsawPiece.new stores visual.path on self.path --------------------------
+
+do
+    local visual = { row = 1, col = 2, path = "assets/puzzles/easy/1.png" }
+    local p = JigsawPiece.new(384, {1, 0, 0, 1}, visual)
+    assert(p.path == "assets/puzzles/easy/1.png",
+        "JigsawPiece.new() should set self.path from visual.path, got " .. tostring(p.path))
+    print("PASS: jigsaw_piece: new() with a visual.path sets self.path")
+end
+
+-- JigsawPiece:to_save() -----------------------------------------------------
+
+do
+    local visual = { row = 1, col = 2, path = "assets/puzzles/easy/1.png" }
+    local p = JigsawPiece.new(384, {1, 1, 1, 1}, visual)
+    p:rotate()
+    p:rotate()
+    local saved = p:to_save()
+    assert(saved.path == p.path, "to_save().path should match piece.path, got " .. tostring(saved.path))
+    assert(saved.row == p.row, "to_save().row should match piece.row, got " .. tostring(saved.row))
+    assert(saved.col == p.col, "to_save().col should match piece.col, got " .. tostring(saved.col))
+    assert(saved.rotation_step == p.rotation_step,
+        "to_save().rotation_step should match piece.rotation_step, got " .. tostring(saved.rotation_step))
+    assert(saved.x == p.sprite.x, "to_save().x should match sprite.x, got " .. tostring(saved.x))
+    assert(saved.y == p.sprite.y, "to_save().y should match sprite.y, got " .. tostring(saved.y))
+    print("PASS: jigsaw_piece: to_save() returns path/row/col/rotation_step/x/y matching the piece")
+end
+
+-- JigsawPiece.from_save() rebuilds a piece from saved data ------------------
+
+do
+    local data = {
+        path = "assets/puzzles/easy/1.png",
+        row = 1,
+        col = 2,
+        rotation_step = 3,
+        x = 250,
+        y = 130,
+    }
+    local piece = JigsawPiece.from_save(data)
+    assert(piece.sprite.x == data.x,
+        "from_save() sprite.x should match data.x (not GROUND_Y-derived), got " .. tostring(piece.sprite.x))
+    assert(piece.sprite.y == data.y,
+        "from_save() sprite.y should match data.y (not GROUND_Y), got " .. tostring(piece.sprite.y))
+    assert(piece.rotation_step == data.rotation_step,
+        "from_save() rotation_step should match data.rotation_step, got " .. tostring(piece.rotation_step))
+    assert(piece.sprite.rotation == data.rotation_step * (math.pi / 2),
+        "from_save() sprite.rotation should equal rotation_step * (pi/2), got " .. tostring(piece.sprite.rotation))
+    assert(piece.sprite.image ~= nil, "from_save() piece's sprite.image should be non-nil")
+    assert(piece.sprite.quad ~= nil, "from_save() piece's sprite.quad should be non-nil")
+    print("PASS: jigsaw_piece: from_save() rebuilds a piece at the saved position/rotation with a non-nil image+quad")
+end
+
+-- JigsawPiece:to_save() -> JigsawPiece.from_save() round trip ---------------
+
+do
+    local visual = { row = 2, col = 0, path = "assets/puzzles/easy/1.png" }
+    local original = JigsawPiece.new(64, {1, 1, 1, 1}, visual)
+    original.sprite.x = 320
+    original.sprite.y = 128
+    original:rotate()
+    local saved = original:to_save()
+    local restored = JigsawPiece.from_save(saved)
+    assert(restored.sprite.x == original.sprite.x,
+        "round-tripped sprite.x should match original, got " .. tostring(restored.sprite.x))
+    assert(restored.sprite.y == original.sprite.y,
+        "round-tripped sprite.y should match original, got " .. tostring(restored.sprite.y))
+    assert(restored.rotation_step == original.rotation_step,
+        "round-tripped rotation_step should match original, got " .. tostring(restored.rotation_step))
+    print("PASS: jigsaw_piece: to_save() -> from_save() round trip preserves position and rotation")
+end
+
 -- centre() ----------------------------------------------------------------
 
 do
@@ -712,6 +784,138 @@ do
     assert(piece.sprite.image ~= nil, "ejected piece's sprite.image should be non-nil")
     assert(piece.sprite.quad  ~= nil, "ejected piece's sprite.quad should be non-nil")
     print("PASS: jigsaw_box: ejected piece's sprite carries non-nil image and quad (visual wiring)")
+end
+
+-- JigsawBox:to_save() -------------------------------------------------------
+
+do
+    GameState:reset()
+    local box = new_easy_box(200, 150)
+    local saved = box:to_save()
+    assert(saved.path == box.path, "to_save().path should match box.path, got " .. tostring(saved.path))
+    assert(saved.tier == box.tier, "to_save().tier should match box.tier, got " .. tostring(saved.tier))
+    assert(saved.target_x == box.target_x,
+        "to_save().target_x should match box.target_x, got " .. tostring(saved.target_x))
+    assert(saved.target_y == box.target_y,
+        "to_save().target_y should match box.target_y, got " .. tostring(saved.target_y))
+    assert(saved.state == "waiting",
+        "to_save().state should be 'waiting' for a never-interacted box, got " .. tostring(saved.state))
+    assert(#saved.pieces_to_spawn == 9,
+        "to_save().pieces_to_spawn should have 9 entries, got " .. tostring(#saved.pieces_to_spawn))
+
+    local seen = {}
+    for _, entry in ipairs(saved.pieces_to_spawn) do
+        assert(entry.row ~= nil and entry.col ~= nil,
+            "each to_save() pieces_to_spawn entry should carry row/col")
+        local cell = entry.col .. "," .. entry.row
+        assert(not seen[cell], "cell " .. cell .. " appears more than once in to_save().pieces_to_spawn")
+        seen[cell] = true
+    end
+    for row = 0, 2 do
+        for col = 0, 2 do
+            local cell = col .. "," .. row
+            assert(seen[cell], "to_save().pieces_to_spawn is missing expected cell " .. cell)
+        end
+    end
+    print("PASS: jigsaw_box: to_save() returns path/tier/target_x/target_y/state matching the box, with pieces_to_spawn covering all 9 cells")
+end
+
+-- JigsawBox:to_save() collapses 'flying' to 'waiting' -----------------------
+
+do
+    GameState:reset()
+    local box = new_easy_box(400, 300, 2000, 2000, {x = 10, y = 20})
+    assert(box.state == "flying", "sanity check: box should start 'flying' before to_save()")
+    local saved = box:to_save()
+    assert(saved.state == "waiting",
+        "to_save() should collapse a 'flying' box's state to 'waiting', got " .. tostring(saved.state))
+    print("PASS: jigsaw_box: to_save() collapses a 'flying' box's state to 'waiting'")
+end
+
+-- JigsawBox:to_save() on an in-progress 'ejecting' box -----------------------
+
+do
+    GameState:reset()
+    local box = new_easy_box(128, 128, 2000, 2000)
+    local pieces = {}
+    box:interact()
+    box:update(1.0, pieces)
+    box:update(1.0, pieces)
+    assert(#pieces == 2, "sanity check: two pieces should have been ejected before to_save()")
+    local saved = box:to_save()
+    assert(saved.state == "ejecting",
+        "to_save().state should be 'ejecting' mid-ejection, got " .. tostring(saved.state))
+    assert(#saved.pieces_to_spawn == 7,
+        "to_save().pieces_to_spawn should reflect the 7 remaining pieces, got " .. tostring(#saved.pieces_to_spawn))
+    print("PASS: jigsaw_box: to_save() on an in-progress 'ejecting' box reports state 'ejecting' and a shortened pieces_to_spawn")
+end
+
+-- JigsawBox.from_save() round trip -------------------------------------------
+
+do
+    GameState:reset()
+    local box = new_easy_box(200, 150, 2000, 2000)
+    local saved = box:to_save()
+    local restored = JigsawBox.from_save(saved, 2000, 2000)
+    assert(restored.path == box.path, "from_save() path should match, got " .. tostring(restored.path))
+    assert(restored.tier == box.tier, "from_save() tier should match, got " .. tostring(restored.tier))
+    assert(restored.target_x == box.target_x, "from_save() target_x should match, got " .. tostring(restored.target_x))
+    assert(restored.target_y == box.target_y, "from_save() target_y should match, got " .. tostring(restored.target_y))
+    assert(restored.cols == box.cols, "from_save() cols should match, got " .. tostring(restored.cols))
+    assert(restored.rows == box.rows, "from_save() rows should match, got " .. tostring(restored.rows))
+    assert(restored.piece_count == box.piece_count,
+        "from_save() piece_count should match, got " .. tostring(restored.piece_count))
+    assert(restored.state == "waiting", "from_save() state should be 'waiting', got " .. tostring(restored.state))
+    assert(#restored.pieces_to_spawn == 9,
+        "from_save() should rebuild all 9 queued pieces, got " .. tostring(#restored.pieces_to_spawn))
+    for i, spec in ipairs(restored.pieces_to_spawn) do
+        assert(spec.image ~= nil, "restored pieces_to_spawn[" .. i .. "] should carry a non-nil image")
+        assert(spec.quad ~= nil, "restored pieces_to_spawn[" .. i .. "] should carry a non-nil quad")
+    end
+    print("PASS: jigsaw_box: to_save() -> from_save() round trip rebuilds an equivalent box with a usable pieces_to_spawn queue")
+end
+
+-- JigsawBox.from_save() restores an 'ejecting' box and it can keep ejecting --
+
+do
+    GameState:reset()
+    local box = new_easy_box(128, 128, 2000, 2000)
+    local pieces = {}
+    box:interact()
+    box:update(1.0, pieces)
+    assert(#pieces == 1, "sanity check: one piece should have been ejected before to_save()")
+    local saved = box:to_save()
+    local restored = JigsawBox.from_save(saved, 2000, 2000)
+    assert(restored.state == "ejecting", "from_save() should restore state 'ejecting', got " .. tostring(restored.state))
+    assert(restored.spawn_timer == 0.3,
+        "from_save() should restore spawn_timer to 0.3, got " .. tostring(restored.spawn_timer))
+    assert(#restored.pieces_to_spawn == 8,
+        "restored box should have 8 pieces still queued, got " .. tostring(#restored.pieces_to_spawn))
+
+    local restored_pieces = {}
+    restored:update(0.3, restored_pieces)
+    assert(#restored_pieces == 1,
+        "restored 'ejecting' box should successfully eject its next queued piece, got " .. tostring(#restored_pieces))
+    assert(#restored.pieces_to_spawn == 7,
+        "restored box's pieces_to_spawn should shrink to 7 after ejecting, got " .. tostring(#restored.pieces_to_spawn))
+    print("PASS: jigsaw_box: from_save() restores an 'ejecting' box whose rebuilt queue is actually usable by update()/_eject_next")
+end
+
+-- JigsawBox.from_save() does not touch GameState -----------------------------
+
+do
+    GameState:reset()
+    local box = new_easy_box(128, 128, 2000, 2000)
+    local saved = box:to_save()
+    local active_count_before = GameState.active_count
+    local is_seen_before = GameState:is_seen(box.tier, box.path)
+    JigsawBox.from_save(saved, 2000, 2000)
+    assert(GameState.active_count == active_count_before,
+        "from_save() must not change GameState.active_count, got " .. tostring(GameState.active_count) ..
+        " expected " .. tostring(active_count_before))
+    assert(GameState:is_seen(box.tier, box.path) == is_seen_before,
+        "from_save() must not change GameState's seen tracking for the box's path")
+    print("PASS: jigsaw_box: from_save() does not call GameState:mark_seen/puzzle_started")
 end
 
 -- JigsawBox.new randomly selects one of the catalog's puzzle images --------

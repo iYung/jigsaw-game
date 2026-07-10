@@ -7,6 +7,8 @@ for _, v in ipairs(arg or {}) do
 end
 
 function love.conf(t)
+    t.identity = "jigsaw_game"
+
     t.window.width    = 1280
     t.window.height   = 720
     t.window.title    = "Love Exemplar"

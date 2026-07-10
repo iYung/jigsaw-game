@@ -4,6 +4,10 @@ local SLOT = 2 * U
 -- Drawer priority for grounded jigsaw pieces and the jigsaw box.
 local PRIORITY_PIECE = 5
 
+-- Drawer priority for a jigsaw box mid-"flying" pile-to-slot animation only
+-- (not the "ejecting" or "waiting" states), so it draws above the player.
+local PRIORITY_BOX_FLYING = 20
+
 -- World-space size and offset of the scrolling background image, sized to
 -- cover the camera's worst-case overreach past the floor edges (1280 + 2*608
 -- x 640 + 2*328), top-left positioned so the floor rect sits centered inside it.
@@ -16,6 +20,7 @@ return {
     U = U,
     SLOT = SLOT,
     PRIORITY_PIECE = PRIORITY_PIECE,
+    PRIORITY_BOX_FLYING = PRIORITY_BOX_FLYING,
     BG_W = BG_W,
     BG_H = BG_H,
     BG_OFFSET_X = BG_OFFSET_X,

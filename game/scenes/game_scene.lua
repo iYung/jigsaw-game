@@ -194,7 +194,7 @@ function GameScene:_spawn_box()
                 self.pile:top_position())
             if not box then return end
             self.boxes[#self.boxes + 1] = box
-            self.drawer:add(box, C.PRIORITY_PIECE)
+            self.drawer:add(box, C.PRIORITY_BOX_FLYING)
             self.active_puzzles[#self.active_puzzles + 1] = {
                 pieces = box.spawned,
                 piece_count = box.piece_count,
@@ -213,7 +213,11 @@ end
 
 function GameScene:update(dt)
     for _, box in ipairs(self.boxes) do
+        local was_flying = box.state == "flying"
         box:update(dt, self.pieces)
+        if was_flying and box.state ~= "flying" then
+            self.drawer:set_priority(box, C.PRIORITY_PIECE)
+        end
     end
 
     for _, piece in ipairs(self.pieces) do

@@ -2040,6 +2040,35 @@ do
     print("PASS: game_scene: on_enter() halves world size and replaces self.ground with self.floor (checkerboard, priority 0)")
 end
 
+-- world background --------------------------------------------------------
+-- GameScene:on_enter() creates self.background, a plain drawer entry that
+-- draws assets/backgrounds/world_bg.png at (C.BG_OFFSET_X, C.BG_OFFSET_Y),
+-- registered in the drawer at priority -1, below the floor's 0
+-- (docs/design/world-background.md, docs/checklists/world-background.md)
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    assert(type(gs.background) == "table", "gs.background should exist as a table")
+    assert(type(gs.background.draw) == "function", "gs.background should have a draw function")
+
+    local found_entry = nil
+    for _, entry in ipairs(gs.drawer.layers) do
+        if entry.sprite == gs.background then found_entry = entry end
+    end
+    assert(found_entry ~= nil, "gs.background should be registered in the drawer's layers")
+    assert(found_entry.priority == -1,
+        "gs.background should be registered at priority -1, got " .. tostring(found_entry.priority))
+
+    local ok, err = pcall(function() gs.background:draw() end)
+    assert(ok, "gs.background:draw() should not error under the headless love.graphics stub: " .. tostring(err))
+    print("PASS: game_scene: on_enter() creates self.background (world bg image, registered at priority -1)")
+end
+
 -- Player:update interacts with the nearest of several waiting boxes ---------
 
 do

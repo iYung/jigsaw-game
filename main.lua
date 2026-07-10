@@ -25,6 +25,8 @@ love.graphics.setDefaultFilter("nearest", "nearest")
 local SceneManager = require("lua/core/scene_manager")
 local GameScene    = require("game/scenes/game_scene")
 local StartScene   = require("game/scenes/start_scene")
+local Save         = require("lua/core/save")
+local GameState    = require("game/game_state")
 
 local LOGICAL_W, LOGICAL_H = 1280, 720
 local canvas
@@ -59,8 +61,21 @@ function love.draw()
     love.graphics.draw(canvas, ox, oy, 0, scale, scale)
 end
 
+local function _save_current()
+    if manager.current and manager.current.to_save then
+        Save.write({ game_state = GameState:to_save(), scene = manager.current:to_save() })
+    end
+end
+
 function love.keypressed(key)
-    if key == "escape" then love.event.quit() end
+    if key == "escape" then
+        if manager.current and manager.current.to_save then
+            _save_current()
+            manager:switch(StartScene.new(manager))
+        else
+            love.event.quit()
+        end
+    end
 end
 
 function love.mousemoved(x, y, ...)
@@ -73,4 +88,8 @@ function love.mousepressed(x, y, button, ...)
     if manager.current and manager.current.mousepressed then
         manager.current:mousepressed(x, y, button)
     end
+end
+
+function love.quit()
+    _save_current()
 end

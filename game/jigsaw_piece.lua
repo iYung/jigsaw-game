@@ -16,6 +16,7 @@ function JigsawPiece.new(x, color, visual)
         self.sprite.quad = visual.quad
         self.row = visual.row
         self.col = visual.col
+        self.path = visual.path
     end
     self.state = "grounded"
     self.rotation_step = 0
@@ -75,6 +76,30 @@ function JigsawPiece:draw_ghost(x, y, alpha)
     self.sprite.x = orig_x
     self.sprite.y = orig_y
     self.sprite.color[4] = orig_a
+end
+
+function JigsawPiece:to_save()
+    return {
+        path = self.path,
+        row = self.row,
+        col = self.col,
+        rotation_step = self.rotation_step,
+        x = self.sprite.x,
+        y = self.sprite.y,
+    }
+end
+
+function JigsawPiece.from_save(data)
+    local image = love.graphics.newImage(data.path)
+    local imgW, imgH = image:getDimensions()
+    local quad = love.graphics.newQuad(data.col * C.SLOT, data.row * C.SLOT, C.SLOT, C.SLOT, imgW, imgH)
+    local piece = JigsawPiece.new(data.x, {1, 1, 1, 1}, { image = image, quad = quad, row = data.row, col = data.col, path = data.path })
+    piece.sprite.x = data.x
+    piece.sprite.y = data.y
+    for _ = 1, data.rotation_step do
+        piece:rotate()
+    end
+    return piece
 end
 
 return JigsawPiece

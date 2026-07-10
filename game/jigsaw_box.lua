@@ -28,6 +28,7 @@ function JigsawBox.new(x, y, world_w, world_h, spawn_from)
     GameState:mark_seen(chosen.tier, path)
 
     local self = setmetatable({}, JigsawBox)
+    self.path = path
     self.tier = chosen.tier
     self.sprite = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.color = {1, 0.75, 0.2, 1}
@@ -61,7 +62,7 @@ function JigsawBox.new(x, y, world_w, world_h, spawn_from)
     for row = 0, rows - 1 do
         for col = 0, cols - 1 do
             local quad = love.graphics.newQuad(col * C.SLOT, row * C.SLOT, C.SLOT, C.SLOT, imgW, imgH)
-            self.pieces_to_spawn[#self.pieces_to_spawn + 1] = { image = puzzle_image, quad = quad, row = row, col = col }
+            self.pieces_to_spawn[#self.pieces_to_spawn + 1] = { image = puzzle_image, quad = quad, row = row, col = col, path = path }
         end
     end
 
@@ -173,6 +174,67 @@ end
 
 function JigsawBox:draw()
     self.sprite:draw()
+end
+
+function JigsawBox:to_save()
+    local pieces_to_spawn = {}
+    for i, spec in ipairs(self.pieces_to_spawn) do
+        pieces_to_spawn[i] = {row = spec.row, col = spec.col}
+    end
+    return {
+        path = self.path,
+        tier = self.tier,
+        state = (self.state == "flying" and "waiting" or self.state),
+        target_x = self.target_x,
+        target_y = self.target_y,
+        pieces_to_spawn = pieces_to_spawn,
+    }
+end
+
+function JigsawBox.from_save(data, world_w, world_h)
+    local self = setmetatable({}, JigsawBox)
+    self.path = data.path
+    self.tier = data.tier
+    self.world_w = world_w
+    self.world_h = world_h
+    self.target_x, self.target_y = data.target_x, data.target_y
+
+    self.sprite = Sprite.new(data.target_x, data.target_y, C.SLOT, C.SLOT)
+    self.sprite.color = {1, 0.75, 0.2, 1}
+    self.sprite.visible = true
+
+    local puzzle_image = love.graphics.newImage(data.path)
+    self.image = puzzle_image
+    local imgW, imgH = puzzle_image:getDimensions()
+    local cols = imgW / C.SLOT
+    local rows = imgH / C.SLOT
+    assert(cols == math.floor(cols) and cols > 0,
+        "puzzle image width must be a positive multiple of C.SLOT, got " .. tostring(imgW))
+    assert(rows == math.floor(rows) and rows > 0,
+        "puzzle image height must be a positive multiple of C.SLOT, got " .. tostring(imgH))
+    self.rows = rows
+    self.cols = cols
+    self.piece_count = rows * cols
+
+    self.pieces_to_spawn = {}
+    for _, entry in ipairs(data.pieces_to_spawn) do
+        local quad = love.graphics.newQuad(entry.col * C.SLOT, entry.row * C.SLOT, C.SLOT, C.SLOT, imgW, imgH)
+        self.pieces_to_spawn[#self.pieces_to_spawn + 1] =
+            { image = puzzle_image, quad = quad, row = entry.row, col = entry.col, path = data.path }
+    end
+
+    self.spawned = {}
+
+    if data.state == "ejecting" then
+        self.state = "ejecting"
+        self.spawn_timer = 0.3
+        self.sprite.visible = false
+    else
+        self.state = "waiting"
+        self.spawn_timer = 0
+    end
+
+    return self
 end
 
 return JigsawBox

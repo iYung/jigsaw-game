@@ -50,6 +50,23 @@ function GameState:is_tier_exhausted(tier, all_paths_for_tier)
     return #self:unseen_paths(tier, all_paths_for_tier) == 0
 end
 
+-- Given a table shaped like PuzzleCatalog.list_by_tier() (e.g.
+-- {easy = {...paths}, med = {...paths}, hard = {...paths}}), returns the
+-- count of puzzle images not yet spawned this session, summed across every
+-- tier in by_tier -- including tiers that are currently locked. This
+-- deliberately does not check is_tier_unlocked: a locked tier's paths are
+-- never marked seen while locked, since mark_seen is only called for paths
+-- drawn from an unlocked tier's pool (see game/jigsaw_box.lua), so counting
+-- a locked tier's unseen paths here causes no double-counting and no
+-- discontinuity in the total when that tier later unlocks.
+function GameState:remaining_puzzle_count(by_tier)
+    local total = 0
+    for tier, paths in pairs(by_tier) do
+        total = total + #self:unseen_paths(tier, paths)
+    end
+    return total
+end
+
 -- Called once per box spawned into the world (opened or not); caller is
 -- responsible for calling this exactly once per spawn.
 function GameState:puzzle_started()

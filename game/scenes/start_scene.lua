@@ -23,6 +23,7 @@ function StartScene.new(manager)
     setmetatable(self, StartScene)
     self.manager  = manager
     self.player_count = 1
+    self._has_controller = #love.joystick.getJoysticks() > 0
     self.items    = { "New Game", "Continue", "Players: 1", "Exit Game" }
     self.selected = 1
     self.input    = Input.new({
@@ -104,6 +105,17 @@ end
 function StartScene:update(dt)
     self.input:update()
 
+    -- 2P requires a second physical input device -- with only a keyboard
+    -- detected, there's nothing distinct to hand Player 2 in the upcoming
+    -- controller-select scene, so re-check every frame (a controller can be
+    -- plugged in/unplugged while sitting at this menu) and snap back to 1P
+    -- if the toggle is currently at 2 but no controller is present anymore.
+    self._has_controller = #love.joystick.getJoysticks() > 0
+    if not self._has_controller and self.player_count == 2 then
+        self.player_count = 1
+        self.items[3] = "Players: 1"
+    end
+
     if self.input:pressed("down") then
         self.selected = _next_selectable(self.selected, 1, self._has_save, #self.items)
     end
@@ -113,7 +125,9 @@ function StartScene:update(dt)
 
     if self.selected == 3 then
         if self.input:pressed("left") or self.input:pressed("right") or self.input:pressed("confirm") then
-            self:_toggle_player_count()
+            if self._has_controller then
+                self:_toggle_player_count()
+            end
         end
         return
     end
@@ -131,6 +145,9 @@ function StartScene:draw()
         local x, y, w, h = self:_item_rect(i)
         if i == 3 and i == self.selected then
             label = "< " .. label .. " >"
+            if not self._has_controller then
+                label = label .. " (connect a controller for 2P)"
+            end
         end
         if i == 2 and not self._has_save then
             local r, g, b = NORMAL_COLOR[1], NORMAL_COLOR[2], NORMAL_COLOR[3]

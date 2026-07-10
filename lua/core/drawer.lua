@@ -21,6 +21,16 @@ function Drawer:remove(sprite)
     end
 end
 
+function Drawer:set_priority(sprite, priority)
+    for _, entry in ipairs(self.layers) do
+        if entry.sprite == sprite then
+            entry.priority = priority
+            table.sort(self.layers, function(a, b) return a.priority < b.priority end)
+            return
+        end
+    end
+end
+
 function Drawer:draw()
     for _, entry in ipairs(self.layers) do
         entry.sprite:draw()

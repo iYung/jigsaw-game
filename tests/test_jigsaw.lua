@@ -1228,6 +1228,49 @@ do
     print("PASS: drawer: remove() no-ops when sprite is not present")
 end
 
+-- Drawer:set_priority --------------------------------------------------------
+
+do
+    local Drawer = require("lua/core/drawer")
+    local Sprite = require("lua/core/sprite")
+
+    local drawer = Drawer.new()
+    local sA = Sprite.new(0, 0, 10, 10)
+    local sB = Sprite.new(0, 0, 10, 10)
+    drawer:add(sA, 5)
+    drawer:add(sB, 10)
+
+    drawer:set_priority(sA, 20)
+
+    assert(#drawer.layers == 2,
+        "layers should still have 2 entries after set_priority, got " .. #drawer.layers)
+    assert(drawer.layers[1].sprite == sB,
+        "sB (priority 10) should now draw first (underneath)")
+    assert(drawer.layers[2].sprite == sA,
+        "sA (bumped to priority 20) should now draw last (on top)")
+    assert(drawer.layers[2].priority == 20,
+        "sA's stored priority should be updated to 20, got " .. tostring(drawer.layers[2].priority))
+    print("PASS: drawer: set_priority() updates an entry's priority and re-sorts layers")
+end
+
+do
+    local Drawer = require("lua/core/drawer")
+    local Sprite = require("lua/core/sprite")
+
+    local drawer = Drawer.new()
+    local sA = Sprite.new(0, 0, 10, 10)
+    local sOther = Sprite.new(0, 0, 10, 10)  -- never added to drawer
+    drawer:add(sA, 5)
+
+    drawer:set_priority(sOther, 20)
+
+    assert(#drawer.layers == 1,
+        "layers should be unchanged when set_priority targets a sprite that was never added, got " .. #drawer.layers)
+    assert(drawer.layers[1].sprite == sA and drawer.layers[1].priority == 5,
+        "the only entry should still be sA at its original priority")
+    print("PASS: drawer: set_priority() no-ops when sprite is not present")
+end
+
 -- pick-up removes the piece from both pieces[] and the Drawer --------------
 
 do
@@ -2188,6 +2231,80 @@ do
         seen[key] = true
     end
     print("PASS: game_scene: _spawn_box() places boxes on grid-aligned, in-bounds, non-colliding cells")
+end
+
+-- GameScene:_spawn_box() adds the flying box to the drawer at C.PRIORITY_BOX_FLYING --
+-- The box created via the pile's spawn_from path (docs/design/box-fly-draw-
+-- priority.md) starts in state "flying" and must draw above everything else,
+-- including the player (priority 10), for the duration of the flight.
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    local boxes_before = #gs.boxes
+    local attempts = 0
+    while #gs.boxes == boxes_before and attempts < 20 do
+        gs:_spawn_box()
+        attempts = attempts + 1
+    end
+    assert(#gs.boxes > boxes_before,
+        "expected _spawn_box() to add at least one new box across " .. attempts .. " attempt(s)")
+
+    local box = gs.boxes[#gs.boxes]
+    assert(box.state == "flying",
+        "sanity check: a box created via _spawn_box()'s spawn_from path should start in state 'flying', got " .. tostring(box.state))
+
+    local drawer_priority = nil
+    for _, entry in ipairs(gs.drawer.layers) do
+        if entry.sprite == box then drawer_priority = entry.priority end
+    end
+    assert(drawer_priority == C.PRIORITY_BOX_FLYING,
+        "a box spawned via _spawn_box() (spawn_from, state 'flying') should be added to the drawer at C.PRIORITY_BOX_FLYING (" ..
+        C.PRIORITY_BOX_FLYING .. "), got " .. tostring(drawer_priority))
+    print("PASS: game_scene: _spawn_box() adds a newly-spawned flying box to the drawer at C.PRIORITY_BOX_FLYING")
+end
+
+-- GameScene:update() restores a landed box's drawer priority to C.PRIORITY_PIECE --
+-- Once a flying box's fly_timer runs out and its state flips away from
+-- "flying" (see JigsawBox:update()), GameScene:update()'s was_flying check
+-- must drop the box's drawer entry back down to the normal piece layer.
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    local boxes_before = #gs.boxes
+    local attempts = 0
+    while #gs.boxes == boxes_before and attempts < 20 do
+        gs:_spawn_box()
+        attempts = attempts + 1
+    end
+    assert(#gs.boxes > boxes_before,
+        "expected _spawn_box() to add at least one new box across " .. attempts .. " attempt(s)")
+
+    local box = gs.boxes[#gs.boxes]
+    assert(box.state == "flying", "sanity check: newly-spawned box should start in state 'flying'")
+
+    gs:update(C.BOX_FLY_DURATION + 1.0)
+
+    assert(box.state ~= "flying",
+        "box should no longer be 'flying' after driving GameScene:update() with dt exceeding C.BOX_FLY_DURATION, got " .. tostring(box.state))
+
+    local drawer_priority = nil
+    for _, entry in ipairs(gs.drawer.layers) do
+        if entry.sprite == box then drawer_priority = entry.priority end
+    end
+    assert(drawer_priority == C.PRIORITY_PIECE,
+        "once a box lands (state no longer 'flying'), GameScene:update() should restore its drawer priority to C.PRIORITY_PIECE (" ..
+        C.PRIORITY_PIECE .. "), got " .. tostring(drawer_priority))
+    print("PASS: game_scene: update() restores a landed box's drawer priority to C.PRIORITY_PIECE once its flight completes")
 end
 
 -- GameScene:_spawn_box() / GameState -----------------------------------------

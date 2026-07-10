@@ -19,6 +19,7 @@ function GameState.new()
     self.solved_count = 0
     self.active_count = 0
     self.solved_by_tier = {easy = 0, med = 0, hard = 0}
+    self.player_count = 1
     return self
 end
 
@@ -108,6 +109,7 @@ function GameState:reset()
     self.solved_count = 0
     self.active_count = 0
     self.solved_by_tier = {easy = 0, med = 0, hard = 0}
+    self.player_count = 1
 end
 
 -- Returns a plain snapshot table of this singleton's persistable fields,
@@ -122,6 +124,7 @@ function GameState:to_save()
         solved_count = self.solved_count,
         active_count = self.active_count,
         solved_by_tier = self.solved_by_tier,
+        player_count = self.player_count,
     }
 end
 
@@ -140,6 +143,8 @@ function GameState:apply_save(data)
     self.solved_count = data.solved_count
     self.active_count = data.active_count
     self.solved_by_tier = data.solved_by_tier
+    -- player_count postdates earlier saves; default rather than leave nil.
+    self.player_count = data.player_count or 1
 end
 
 -- Module returns a singleton instance (not the class table) so existing

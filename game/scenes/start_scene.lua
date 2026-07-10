@@ -21,16 +21,21 @@ function StartScene.new(manager)
     local self = Scene.new(LOGICAL_W, LOGICAL_H)
     setmetatable(self, StartScene)
     self.manager  = manager
-    self.items    = { "New Game", "Continue", "Exit Game" }
+    self.player_count = 1
+    self.items    = { "New Game", "Continue", "Players: 1", "Exit Game" }
     self.selected = 1
     self.input    = Input.new({
         up      = { "w", "up" },
         down    = { "s", "down" },
+        left    = { "a", "left" },
+        right   = { "d", "right" },
         confirm = { "e", "return" },
     }, {
         gamepad_buttons = {
             up      = { "dpup" },
             down    = { "dpdown" },
+            left    = { "dpleft" },
+            right   = { "dpright" },
             confirm = { "a" },
         },
         joystick_scope = "first_two",
@@ -67,6 +72,7 @@ function StartScene:on_exit() end
 function StartScene:_confirm()
     if self.selected == 1 then
         GameState:reset()
+        GameState.player_count = self.player_count
         self.manager:switch(GameScene.new())
     elseif self.selected == 2 then
         if not self._has_save then return end
@@ -74,9 +80,16 @@ function StartScene:_confirm()
         if not data then return end
         GameState:apply_save(data.game_state)
         self.manager:switch(GameScene.new(data.scene))
-    elseif self.selected == 3 then
+    elseif self.selected == 4 then
         love.event.quit()
     end
+end
+
+-- Flips self.player_count between 1 and 2 and keeps the "Players: N" menu
+-- label (item index 3) in sync with the new value.
+function StartScene:_toggle_player_count()
+    self.player_count = (self.player_count == 1) and 2 or 1
+    self.items[3] = "Players: " .. self.player_count
 end
 
 function StartScene:update(dt)
@@ -88,6 +101,14 @@ function StartScene:update(dt)
     if self.input:pressed("up") then
         self.selected = _next_selectable(self.selected, -1, self._has_save, #self.items)
     end
+
+    if self.selected == 3 then
+        if self.input:pressed("left") or self.input:pressed("right") or self.input:pressed("confirm") then
+            self:_toggle_player_count()
+        end
+        return
+    end
+
     if self.input:pressed("confirm") then
         self:_confirm()
     end
@@ -99,6 +120,9 @@ function StartScene:draw()
 
     for i, label in ipairs(self.items) do
         local x, y, w, h = self:_item_rect(i)
+        if i == 3 and i == self.selected then
+            label = "< " .. label .. " >"
+        end
         if i == 2 and not self._has_save then
             local r, g, b = NORMAL_COLOR[1], NORMAL_COLOR[2], NORMAL_COLOR[3]
             love.graphics.setColor(r, g, b, 0.4)

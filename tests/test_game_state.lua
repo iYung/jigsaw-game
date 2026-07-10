@@ -330,3 +330,78 @@ do
         "apply_save() with a mismatched version should not apply the mismatched data's seen table, got is_seen() == true")
     print("PASS: game_state: apply_save(nil) and apply_save({version mismatch}) both fall back to a freshly-reset state instead of erroring or partially applying fields")
 end
+
+-- player_count defaults to 1 after reset() -----------------------------------
+
+do
+    GameState:reset()
+    assert(GameState.player_count == 1,
+        "player_count should default to 1 after reset(), got " .. tostring(GameState.player_count))
+    print("PASS: game_state: player_count defaults to 1 after reset()")
+end
+
+-- to_save() reflects a mutated player_count -----------------------------------
+
+do
+    GameState:reset()
+    GameState.player_count = 2
+
+    local saved = GameState:to_save()
+    assert(saved.player_count == 2,
+        "to_save().player_count should reflect the live singleton's player_count == 2, got " .. tostring(saved.player_count))
+    print("PASS: game_state: to_save() includes the current player_count")
+end
+
+-- apply_save(data) restores player_count --------------------------------------
+
+do
+    GameState:reset()
+    local data = {
+        version = 1,
+        seen = {easy = {}, med = {}, hard = {}},
+        solved_count = 0,
+        active_count = 0,
+        solved_by_tier = {easy = 0, med = 0, hard = 0},
+        player_count = 2,
+    }
+
+    GameState:apply_save(data)
+    assert(GameState.player_count == 2,
+        "apply_save() should restore player_count == 2, got " .. tostring(GameState.player_count))
+    print("PASS: game_state: apply_save(data) restores player_count")
+end
+
+-- apply_save(data) defaults player_count to 1 when the save predates it -------
+
+do
+    GameState:reset()
+    GameState.player_count = 2
+    local data = {
+        version = 1,
+        seen = {easy = {}, med = {}, hard = {}},
+        solved_count = 0,
+        active_count = 0,
+        solved_by_tier = {easy = 0, med = 0, hard = 0},
+        -- player_count intentionally omitted: simulates a save written
+        -- before this field existed.
+    }
+
+    GameState:apply_save(data)
+    assert(GameState.player_count == 1,
+        "apply_save() should default player_count to 1 when the save data omits it, got " .. tostring(GameState.player_count))
+    print("PASS: game_state: apply_save(data) defaults player_count to 1 for a version-1 save missing that field")
+end
+
+-- reset() restores player_count to 1 after it was changed ---------------------
+
+do
+    GameState:reset()
+    GameState.player_count = 2
+    assert(GameState.player_count == 2,
+        "test setup should have driven player_count to 2 before reset()")
+
+    GameState:reset()
+    assert(GameState.player_count == 1,
+        "reset() should restore player_count to 1, got " .. tostring(GameState.player_count))
+    print("PASS: game_state: reset() restores player_count to 1 after being changed to 2")
+end

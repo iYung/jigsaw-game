@@ -1284,8 +1284,8 @@ end
 do
     local visual = { image = {}, quad = {}, row = 0, col = 0 }
     local p = JigsawPiece.new(0, {1, 1, 1, 1}, visual)
-    assert(p.sprite.shader ~= nil, "piece constructed with a visual should carry a non-nil sprite.shader")
-    print("PASS: jigsaw_piece: new() with visual assigns a non-nil sprite.shader")
+    assert(p.sprite.shader == nil, "piece constructed with a visual should not carry a shader")
+    print("PASS: jigsaw_piece: new() with visual leaves sprite.shader nil")
 end
 
 do

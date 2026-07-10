@@ -4,7 +4,7 @@ A 2D jigsaw puzzle game built with Love2D.
 
 ## Gameplay
 
-The game boots into a **start menu** — **New Game**, **Continue**, and **Exit Game**. Navigate with **W/S** or the arrow keys, confirm with **E** or Enter, or just hover and click with the mouse. Choosing New Game fades into a fresh world; Continue (dimmed/disabled until a save exists) restores the world exactly as it was left. Progress — loose pieces, boxes, completed puzzles, and puzzle-tracking state — is saved automatically on quit, single-slot, no periodic autosave.
+The game boots into a **start menu** — **New Game**, **Continue**, and **Exit Game**. Navigate with **W/S** or the arrow keys, confirm with **E** or Enter. Choosing New Game fades into a fresh world; Continue (dimmed/disabled until a save exists) restores the world exactly as it was left. Progress — loose pieces, boxes, completed puzzles, and puzzle-tracking state — is saved automatically on quit, single-slot, no periodic autosave.
 
 - **WASD** — move the player
 - **E** — interact: open the piece box, or pick up / drop a jigsaw piece
@@ -30,7 +30,7 @@ game/           Game-specific code
   jigsaw_solver.lua Puzzle-completion check (is_assembled(pieces, expected_count)) — true when exactly expected_count pieces all share one rotation_step (0-3) and are in correct relative arrangement under that rotation, regardless of absolute world position; checked per-box (GameScene:active_puzzles) so differently-sized/simultaneous puzzles solve independently
   player.lua      Player movement and piece interaction (64x64 sprite, matches piece/grid size)
   scenes/         GameScene, StartScene
-    start_scene.lua Start menu shown on launch — "New Game"/"Continue"/"Exit Game", drawn as plain solid-color rectangles + text (no art/sound assets, unlike ../wip's start screen); owns its own lua/core/input.lua instance (W/S or arrows to navigate, E or Enter to confirm, wrapping between the three items, skipping Continue when no save exists) plus mousemoved/mousepressed handlers (forwarded from main.lua) that convert raw window coordinates into the 1280x720 logical canvas space to hover/click items; New Game switches the SceneManager to a fresh GameScene, Continue reads lua/core/save.lua's save.dat and restores GameState + GameScene (dimmed/disabled with no save present), Exit Game calls love.event.quit()
+    start_scene.lua Start menu shown on launch — "New Game"/"Continue"/"Exit Game", drawn as plain solid-color rectangles + text (no art/sound assets, unlike ../wip's start screen); owns its own lua/core/input.lua instance (W/S or arrows to navigate, E or Enter to confirm, wrapping between the three items, skipping Continue when no save exists); New Game switches the SceneManager to a fresh GameScene, Continue reads lua/core/save.lua's save.dat and restores GameState + GameScene (dimmed/disabled with no save present), Exit Game calls love.event.quit()
 lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite (optional quad sub-rectangle drawing), save.lua (Save.exists()/write()/read() — single-slot save.dat, written by main.lua's love.quit() whenever the current scene is a GameScene), etc.
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
 tests/          Test files — run with: love . --headless

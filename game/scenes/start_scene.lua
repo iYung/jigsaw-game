@@ -46,19 +46,6 @@ function StartScene:_item_rect(i)
     return x, y, ITEM_W, ITEM_H
 end
 
-function StartScene:_point_in_rect(px, py, x, y, w, h)
-    return px >= x and px <= x + w and py >= y and py <= y + h
-end
-
--- Convert raw window coordinates into the 1280x720 logical canvas space,
--- using the same scale/offset math as main.lua's love.draw letterboxing.
-function StartScene:_to_logical(x, y)
-    local scale = math.min(love.graphics.getWidth() / LOGICAL_W, love.graphics.getHeight() / LOGICAL_H)
-    local ox = (love.graphics.getWidth() - LOGICAL_W * scale) / 2
-    local oy = (love.graphics.getHeight() - LOGICAL_H * scale) / 2
-    return (x - ox) / scale, (y - oy) / scale
-end
-
 -- Advances `current` by `delta` (+1 for down, -1 for up), wrapping modulo
 -- `n`, but skipping index 2 ("Continue") whenever `has_save` is false --
 -- mirrors /root/wip/lua/game/scenes/start_scene.lua's _next_selectable.
@@ -133,30 +120,6 @@ function StartScene:draw()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
-end
-
-function StartScene:mousemoved(x, y)
-    local lx, ly = self:_to_logical(x, y)
-    for i = 1, #self.items do
-        local rx, ry, rw, rh = self:_item_rect(i)
-        if self:_point_in_rect(lx, ly, rx, ry, rw, rh) then
-            self.selected = i
-            return
-        end
-    end
-end
-
-function StartScene:mousepressed(x, y, button)
-    if button ~= 1 then return end
-    local lx, ly = self:_to_logical(x, y)
-    for i = 1, #self.items do
-        local rx, ry, rw, rh = self:_item_rect(i)
-        if self:_point_in_rect(lx, ly, rx, ry, rw, rh) then
-            self.selected = i
-            self:_confirm()
-            return
-        end
-    end
 end
 
 return StartScene

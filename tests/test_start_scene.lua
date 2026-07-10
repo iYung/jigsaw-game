@@ -306,6 +306,39 @@ do
     print("PASS: start_scene: down-navigation skip-logic depends on whether a save is present")
 end
 
+-- Test 12: confirming New Game resets GameState. GameState is a
+-- process-lifetime singleton, and New Game can now run more than once per
+-- process (via ESC returning to the start menu -- see game/scenes/game_scene.lua's
+-- on_exit -- and choosing New Game again), so a dirty GameState left over
+-- from a prior, abandoned game must not leak into the next one: leftover
+-- active_count would wrongly count against GameState.MAX_ACTIVE_PUZZLES,
+-- and leftover `seen` entries would wrongly suppress puzzle images that
+-- should be selectable again in a genuinely fresh game.
+do
+    reset_fs()
+    GameState:reset()
+    GameState:mark_seen("easy", "assets/puzzles/easy/1.png")
+    GameState:puzzle_started()
+    GameState:puzzle_started()
+    GameState:puzzle_started()
+    assert(GameState.active_count == 3, "sanity: active_count should be 3 before New Game")
+
+    local manager = {
+        switch = function(self, scene) end,
+    }
+    local scene = StartScene.new(manager)
+    scene:on_enter()
+    scene.selected = 1
+    scene:_confirm()
+
+    assert(GameState.active_count == 0,
+        "confirming New Game should reset GameState.active_count, got " .. tostring(GameState.active_count))
+    assert(GameState:is_seen("easy", "assets/puzzles/easy/1.png") == false,
+        "confirming New Game should reset GameState's seen table")
+
+    print("PASS: start_scene: confirming New Game resets GameState")
+end
+
 print("ALL TESTS PASSED")
 
 -- Leave the process-lifetime GameState singleton clean for whichever test

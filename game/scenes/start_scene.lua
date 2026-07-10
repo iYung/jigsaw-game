@@ -72,6 +72,7 @@ function StartScene:on_exit() end
 
 function StartScene:_confirm()
     if self.selected == 1 then
+        GameState:reset()
         self.manager:switch(GameScene.new())
     elseif self.selected == 2 then
         if not self._has_save then return end

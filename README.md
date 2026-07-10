@@ -4,12 +4,14 @@ A 2D jigsaw puzzle game built with Love2D.
 
 ## Gameplay
 
-The game boots into a **start menu** — **New Game**, **Continue**, and **Exit Game**. Navigate with **W/S** or the arrow keys, confirm with **E** or Enter, or just hover and click with the mouse. Choosing New Game fades into a fresh world; Continue (dimmed/disabled until a save exists) restores the world exactly as it was left. Progress — loose pieces, boxes, completed puzzles, and puzzle-tracking state — is saved automatically on quit, single-slot, no periodic autosave.
+The game boots into a **start menu** — **New Game**, **Continue**, and **Exit Game**. Navigate with **W/S** or the arrow keys, confirm with **E** or Enter. Choosing New Game fades into a fresh world; Continue (dimmed/disabled until a save exists) restores the world exactly as it was left. Progress — loose pieces, boxes, completed puzzles, and puzzle-tracking state — is saved automatically on quit, single-slot, no periodic autosave.
 
 - **WASD** — move the player
 - **E** — interact: open the piece box, or pick up / drop a jigsaw piece
 - **R** — rotate held piece 90°
 - **ESC** — in-game, saves and returns to the start menu; at the start menu, quits
+
+A gamepad also works throughout, first two connected controllers only: **D-pad or left stick** to move/navigate, **A** to interact/confirm, **X** to rotate a held piece. The start menu is fully controller-navigable too.
 
 The world starts with a gold **box** near the player. Press **E** next to it and the box disappears instantly, while the jigsaw pieces (a grid slice of a puzzle image — see `assets/puzzles/`, picked uniformly at random from whichever images haven't been shown yet this session) continue to eject one by one in the background, in shuffled order and with a random initial rotation, into adjacent slots. Dropped pieces snap to the 64px (2U) world grid. While carrying a piece, a faint ghost copy of it is drawn on the ground at the spot it would land if dropped right now, so you can preview the drop location before committing. When not carrying a piece, the grid cell the player is currently standing over is highlighted with a faint white fill instead, so the same drop-target feedback is visible at all times. Once all pieces are correctly arranged relative to each other (one shared rotation across every piece — upright, 90°, 180°, or 270° — and right relative position under that rotation, anywhere in the world, not just next to the box), the pieces fade out and disappear.
 
@@ -28,7 +30,7 @@ game/           Game-specific code
   jigsaw_solver.lua Puzzle-completion check (is_assembled(pieces, expected_count)) — true when exactly expected_count pieces all share one rotation_step (0-3) and are in correct relative arrangement under that rotation, regardless of absolute world position; checked per-box (GameScene:active_puzzles) so differently-sized/simultaneous puzzles solve independently
   player.lua      Player movement and piece interaction (64x64 sprite, matches piece/grid size)
   scenes/         GameScene, StartScene
-    start_scene.lua Start menu shown on launch — "New Game"/"Continue"/"Exit Game", drawn as plain solid-color rectangles + text (no art/sound assets, unlike ../wip's start screen); owns its own lua/core/input.lua instance (W/S or arrows to navigate, E or Enter to confirm, wrapping between the three items, skipping Continue when no save exists) plus mousemoved/mousepressed handlers (forwarded from main.lua) that convert raw window coordinates into the 1280x720 logical canvas space to hover/click items; New Game switches the SceneManager to a fresh GameScene, Continue reads lua/core/save.lua's save.dat and restores GameState + GameScene (dimmed/disabled with no save present), Exit Game calls love.event.quit()
+    start_scene.lua Start menu shown on launch — "New Game"/"Continue"/"Exit Game", drawn as plain solid-color rectangles + text (no art/sound assets, unlike ../wip's start screen); owns its own lua/core/input.lua instance (W/S or arrows to navigate, E or Enter to confirm, wrapping between the three items, skipping Continue when no save exists); New Game switches the SceneManager to a fresh GameScene, Continue reads lua/core/save.lua's save.dat and restores GameState + GameScene (dimmed/disabled with no save present), Exit Game calls love.event.quit()
 lua/core/       Engine classes — Camera, Drawer, Input, Scene, Sprite (optional quad sub-rectangle drawing), save.lua (Save.exists()/write()/read() — single-slot save.dat, written by main.lua's love.quit() whenever the current scene is a GameScene), etc.
 lua/headless/   Headless test infrastructure (stubs, HeadlessInput, runner)
 tests/          Test files — run with: love . --headless
@@ -54,6 +56,12 @@ bash scripts/build_web.sh   # outputs to web/
 ```
 
 `APP_TITLE` env var overrides the browser tab title (default: `"Love Exemplar"`).
+
+The web build's on-screen controls include a ⌨/🎮 toggle that switches
+between touch-keyboard buttons and a simulated gamepad (a fake
+`navigator.getGamepads()` device driven by the on-screen D-pad/A/X buttons).
+This lets you smoke-test controller support in any browser without a
+physical controller plugged in.
 
 ## CI / Cloudflare Pages
 

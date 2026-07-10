@@ -81,6 +81,9 @@ love.window.setFullscreen = function() end
 love.filesystem = love.filesystem or {}
 love.filesystem.getInfo = function() return nil end
 
+love.joystick = love.joystick or {}
+love.joystick.getJoysticks = function() return {} end
+
 love.audio = love.audio or {}
 
 -- Stub source object returned by newSource.

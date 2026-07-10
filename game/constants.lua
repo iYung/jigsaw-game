@@ -8,6 +8,10 @@ local PRIORITY_PIECE = 5
 -- (not the "ejecting" or "waiting" states), so it draws above the player.
 local PRIORITY_BOX_FLYING = 20
 
+-- Minimum normalized gamepad stick/axis magnitude before input registers,
+-- to ignore drift near the stick's resting position.
+local GAMEPAD_DEADZONE = 0.35
+
 -- World-space size and offset of the scrolling background image, sized to
 -- cover the camera's worst-case overreach past the floor edges (1280 + 2*608
 -- x 640 + 2*328), top-left positioned so the floor rect sits centered inside it.
@@ -21,6 +25,7 @@ return {
     SLOT = SLOT,
     PRIORITY_PIECE = PRIORITY_PIECE,
     PRIORITY_BOX_FLYING = PRIORITY_BOX_FLYING,
+    GAMEPAD_DEADZONE = GAMEPAD_DEADZONE,
     BG_W = BG_W,
     BG_H = BG_H,
     BG_OFFSET_X = BG_OFFSET_X,

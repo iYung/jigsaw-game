@@ -78,18 +78,6 @@ function love.keypressed(key)
     end
 end
 
-function love.mousemoved(x, y, ...)
-    if manager.current and manager.current.mousemoved then
-        manager.current:mousemoved(x, y)
-    end
-end
-
-function love.mousepressed(x, y, button, ...)
-    if manager.current and manager.current.mousepressed then
-        manager.current:mousepressed(x, y, button)
-    end
-end
-
 function love.quit()
     _save_current()
 end

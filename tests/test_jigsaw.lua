@@ -1158,6 +1158,86 @@ do
     print("PASS: player: draw() with no held piece only draws the player's own sprite, without error")
 end
 
+-- Player:draw() with no held piece highlights the hovered grid cell -------
+-- (spies on love.graphics.setColor/rectangle the same way other tests in
+-- this file spy on love.graphics.newImage/newQuad: save the real fn, swap in
+-- a capturing wrapper that still calls through, then restore it afterward)
+
+do
+    local Player = require("game/player")
+
+    local player = Player.new(300, 170)
+    player.held_piece = nil
+
+    local dt = player:drop_target()
+
+    local calls = {}
+    local real_setColor  = love.graphics.setColor
+    local real_rectangle = love.graphics.rectangle
+    love.graphics.setColor = function(...)
+        calls[#calls + 1] = { fn = "setColor", ... }
+        return real_setColor(...)
+    end
+    love.graphics.rectangle = function(...)
+        calls[#calls + 1] = { fn = "rectangle", ... }
+        return real_rectangle(...)
+    end
+
+    player:draw()
+
+    love.graphics.setColor  = real_setColor
+    love.graphics.rectangle = real_rectangle
+
+    assert(#calls >= 3, "expected at least 3 captured love.graphics calls, got " .. #calls)
+    assert(calls[1].fn == "setColor"
+        and calls[1][1] == 1 and calls[1][2] == 1 and calls[1][3] == 1 and calls[1][4] == 0.25,
+        "first call should be setColor(1, 1, 1, 0.25) for the hover-cell highlight")
+    assert(calls[2].fn == "rectangle"
+        and calls[2][1] == "fill" and calls[2][2] == dt.snap_x and calls[2][3] == dt.snap_y
+        and calls[2][4] == C.SLOT and calls[2][5] == C.SLOT,
+        "second call should be rectangle(\"fill\", snap_x, snap_y, C.SLOT, C.SLOT) using drop_target()'s snap values")
+    assert(calls[3].fn == "setColor"
+        and calls[3][1] == 1 and calls[3][2] == 1 and calls[3][3] == 1 and calls[3][4] == 1,
+        "third call should restore setColor(1, 1, 1, 1)")
+    print("PASS: player: draw() with no held piece highlights the hovered cell (setColor 0.25 -> rectangle fill at drop_target()'s snap -> setColor restore)")
+end
+
+-- Player:draw() while holding a piece draws no hover-cell highlight -------
+-- (ghost preview and cell highlight are mutually exclusive per draw() call)
+
+do
+    local Player = require("game/player")
+
+    local player = Player.new(300, 170)
+    local piece = JigsawPiece.new(0, {1, 0, 0, 1})
+    piece:pick_up()
+    player.held_piece = piece
+
+    local dt = player:drop_target()
+
+    local rectangle_calls = {}
+    local real_rectangle = love.graphics.rectangle
+    love.graphics.rectangle = function(...)
+        rectangle_calls[#rectangle_calls + 1] = { ... }
+        return real_rectangle(...)
+    end
+
+    player:draw()
+
+    love.graphics.rectangle = real_rectangle
+
+    local highlight_found = false
+    for _, args in ipairs(rectangle_calls) do
+        if args[1] == "fill" and args[2] == dt.snap_x and args[3] == dt.snap_y
+           and args[4] == C.SLOT and args[5] == C.SLOT then
+            highlight_found = true
+        end
+    end
+    assert(not highlight_found,
+        "no hover-cell highlight rectangle (snap_x, snap_y, C.SLOT, C.SLOT) should be drawn while a piece is held")
+    print("PASS: player: draw() while holding a piece draws no hover-cell highlight (ghost preview and highlight are mutually exclusive)")
+end
+
 -- draw_ghost() draws at the given position/alpha then restores real state --
 
 do

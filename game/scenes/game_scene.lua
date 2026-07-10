@@ -30,6 +30,15 @@ function GameScene:on_enter()
     self.player = Player.new(0, GROUND_Y - C.SLOT)
     self.drawer:add(self.player, 10)
 
+    self.background = {
+        image = love.graphics.newImage("assets/backgrounds/world_bg.png"),
+        draw = function(self)
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(self.image, C.BG_OFFSET_X, C.BG_OFFSET_Y)
+        end,
+    }
+    self.drawer:add(self.background, -1)
+
     self.floor = {
         draw = function()
             local cols = WORLD_W / C.SLOT

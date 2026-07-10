@@ -71,11 +71,24 @@ end
 
 function StartScene:on_exit() end
 
+-- Clamps `player_count` to 1 if no controller is currently connected --
+-- 2P has nothing to hand Player 2 in the controller-select scene without
+-- one. Checked fresh at the exact moment New Game/Continue is confirmed,
+-- rather than continuously every frame, so a one-frame joystick-enumeration
+-- hiccup while merely navigating the menu can't silently discard a
+-- deliberate 2P selection before the player ever reaches confirm.
+local function _clamp_player_count(player_count)
+    if player_count == 2 and #love.joystick.getJoysticks() == 0 then
+        return 1
+    end
+    return player_count
+end
+
 function StartScene:_confirm()
     if self.selected == 1 then
         GameState:reset()
-        GameState.player_count = self.player_count
-        if self.player_count == 2 then
+        GameState.player_count = _clamp_player_count(self.player_count)
+        if GameState.player_count == 2 then
             self.manager:switch(ControllerSelectScene.new(self.manager))
         else
             self.manager:switch(GameScene.new())
@@ -85,6 +98,7 @@ function StartScene:_confirm()
         local data = Save.read()
         if not data then return end
         GameState:apply_save(data.game_state)
+        GameState.player_count = _clamp_player_count(GameState.player_count)
         if GameState.player_count == 2 then
             self.manager:switch(ControllerSelectScene.new(self.manager, data.scene))
         else
@@ -107,14 +121,14 @@ function StartScene:update(dt)
 
     -- 2P requires a second physical input device -- with only a keyboard
     -- detected, there's nothing distinct to hand Player 2 in the upcoming
-    -- controller-select scene, so re-check every frame (a controller can be
-    -- plugged in/unplugged while sitting at this menu) and snap back to 1P
-    -- if the toggle is currently at 2 but no controller is present anymore.
+    -- controller-select scene. Recomputed every frame purely as a read (for
+    -- the toggle gate below and the draw() hint) -- deliberately does NOT
+    -- write self.player_count back to 1 here; that would silently discard a
+    -- deliberate 2P selection on any single-frame joystick-enumeration
+    -- hiccup while just navigating the menu. The only places player_count
+    -- actually changes are the explicit toggle keypress below and the
+    -- confirm-time clamp in _confirm().
     self._has_controller = #love.joystick.getJoysticks() > 0
-    if not self._has_controller and self.player_count == 2 then
-        self.player_count = 1
-        self.items[3] = "Players: 1"
-    end
 
     if self.input:pressed("down") then
         self.selected = _next_selectable(self.selected, 1, self._has_save, #self.items)

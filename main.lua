@@ -24,6 +24,7 @@ love.graphics.setDefaultFilter("nearest", "nearest")
 
 local SceneManager = require("lua/core/scene_manager")
 local GameScene    = require("game/scenes/game_scene")
+local StartScene   = require("game/scenes/start_scene")
 
 local LOGICAL_W, LOGICAL_H = 1280, 720
 local canvas
@@ -39,7 +40,7 @@ function love.load()
     canvas:setFilter("nearest", "nearest")
 
     manager = SceneManager.new(LOGICAL_W, LOGICAL_H)
-    manager:switch(GameScene.new())
+    manager:switch(StartScene.new(manager))
 end
 
 function love.update(dt)
@@ -60,4 +61,16 @@ end
 
 function love.keypressed(key)
     if key == "escape" then love.event.quit() end
+end
+
+function love.mousemoved(x, y, ...)
+    if manager.current and manager.current.mousemoved then
+        manager.current:mousemoved(x, y)
+    end
+end
+
+function love.mousepressed(x, y, button, ...)
+    if manager.current and manager.current.mousepressed then
+        manager.current:mousepressed(x, y, button)
+    end
 end

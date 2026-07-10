@@ -145,6 +145,11 @@ function Player:draw()
     if self.held_piece ~= nil then
         local drop_target = self:drop_target()
         self.held_piece:draw_ghost(drop_target.snap_x, drop_target.snap_y)
+    else
+        local drop_target = self:drop_target()
+        love.graphics.setColor(1, 1, 1, 0.25)
+        love.graphics.rectangle("fill", drop_target.snap_x, drop_target.snap_y, C.SLOT, C.SLOT)
+        love.graphics.setColor(1, 1, 1, 1)
     end
     self.sprite:draw()
     if self.held_piece ~= nil then

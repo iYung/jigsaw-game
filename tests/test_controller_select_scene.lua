@@ -118,39 +118,14 @@ do
     end)
 end
 
--- Test 3: overlap rejection -- once a device is claimed by one player, that
--- same device pressing the other player's direction does not steal it; a
--- different, unclaimed device pressing that direction still works.
-do
-    local c1_buttons = {}
-    with_joysticks({ fake_stick(c1_buttons) }, function()
-        local scene = ControllerSelectScene.new({})
-        scene:on_enter()
-
-        -- Controller 1 claims p2 via "right".
-        tap_button(scene, c1_buttons, "dpright")
-        assert(scene.p2_device ~= nil and scene.p2_device.type == "gamepad" and scene.p2_device.index == 1,
-            "sanity: controller 1 should have claimed p2_device")
-
-        -- Controller 1 (already P2's device) pressing "left" must NOT steal p1 --
-        -- overlap rejected, p1_device stays nil.
-        tap_button(scene, c1_buttons, "dpleft")
-        assert(scene.p1_device == nil,
-            "controller 1 pressing left should be rejected (already claimed by p2), p1_device should remain nil")
-
-        -- A different, unclaimed device (keyboard) pressing "left" still claims
-        -- p1 normally.
-        tap_key(scene, "a") -- "left"
-        assert(scene.p1_device ~= nil and scene.p1_device.type == "keyboard",
-            "a different, unclaimed device (keyboard) pressing left should still claim p1_device")
-
-        print("PASS: controller_select_scene: overlap rejected for the claiming device, but a different device still claims normally")
-    end)
-end
-
--- Test 3b: a device can release its own claim by pressing its own direction
--- again (unclaim), rather than being stuck once claimed -- a different
--- device can then freely claim the now-empty slot.
+-- Test 3: releasing via the opposite button -- a device holding P1 pressing
+-- "right" (P2's claim button, and P1's release button) releases its own P1
+-- claim rather than claiming P2 or being a rejected no-op; p2_device stays
+-- nil since the press was consumed as a release, not a claim. This is also
+-- the invariant that used to be called "overlap rejection": a device can
+-- never end up holding both slots at once, since pressing the other slot's
+-- button always releases your own claim first rather than advancing to
+-- claim the other one.
 do
     local c1_buttons = {}
     with_joysticks({ fake_stick(c1_buttons) }, function()
@@ -161,16 +136,42 @@ do
         assert(scene.p1_device ~= nil and scene.p1_device.type == "keyboard",
             "sanity: keyboard should have claimed p1_device")
 
-        tap_key(scene, "a") -- keyboard presses "left" again
+        tap_key(scene, "d") -- keyboard presses "right" -- its own release button
         assert(scene.p1_device == nil,
-            "keyboard pressing left again while already p1 should release its own claim, not re-claim/no-op")
+            "keyboard (holding p1) pressing right should release its own p1 claim")
+        assert(scene.p2_device == nil,
+            "releasing p1 via the opposite button should not also claim p2")
 
-        -- The slot is free again -- a different device can claim it.
-        tap_button(scene, c1_buttons, "dpleft")
-        assert(scene.p1_device ~= nil and scene.p1_device.type == "gamepad" and scene.p1_device.index == 1,
-            "after keyboard releases p1, controller 1 pressing left should claim it")
+        print("PASS: controller_select_scene: a device holding P1 releases it by pressing the opposite (right) button")
+    end)
+end
 
-        print("PASS: controller_select_scene: pressing your own claim's direction again releases it instead of being stuck")
+-- Test 3b: releasing via the opposite button, mirrored for P2 -- a device
+-- holding P2 pressing "left" (P1's claim button, and P2's release button)
+-- releases its own P2 claim; the freed slot can then be claimed normally by
+-- a different device.
+do
+    local c1_buttons = {}
+    with_joysticks({ fake_stick(c1_buttons) }, function()
+        local scene = ControllerSelectScene.new({})
+        scene:on_enter()
+
+        tap_button(scene, c1_buttons, "dpright") -- controller 1 claims p2 via "right"
+        assert(scene.p2_device ~= nil and scene.p2_device.type == "gamepad" and scene.p2_device.index == 1,
+            "sanity: controller 1 should have claimed p2_device")
+
+        tap_button(scene, c1_buttons, "dpleft") -- controller 1 presses "left" -- its own release button
+        assert(scene.p2_device == nil,
+            "controller 1 (holding p2) pressing left should release its own p2 claim")
+        assert(scene.p1_device == nil,
+            "releasing p2 via the opposite button should not also claim p1")
+
+        -- The slot is free again -- a different device (keyboard) can claim it.
+        tap_key(scene, "a")
+        assert(scene.p1_device ~= nil and scene.p1_device.type == "keyboard",
+            "after controller 1 releases p2, keyboard pressing left should claim p1 normally")
+
+        print("PASS: controller_select_scene: a device holding P2 releases it by pressing the opposite (left) button")
     end)
 end
 
@@ -251,14 +252,15 @@ do
         assert(scene.p1_confirmed == true, "sanity: p1 should be confirmed")
         assert(switched_with == nil, "sanity: should not have switched yet (p2 hasn't confirmed)")
 
-        -- Controller 1 releases its own p2 claim (pressing its own
-        -- direction again) -- p2_device goes back to nil.
-        tap_button(scene, c1_buttons, "dpright")
-        assert(scene.p2_device == nil, "controller 1 pressing right again while already p2 should release its claim")
+        -- Controller 1 releases its own p2 claim via the opposite button
+        -- ("left") -- p2_device goes back to nil.
+        tap_button(scene, c1_buttons, "dpleft")
+        assert(scene.p2_device == nil, "controller 1 pressing left (its release button) while p2 should release its claim")
 
-        -- Keyboard now releases its own p1 claim the same way.
-        tap_key(scene, "a")
-        assert(scene.p1_device == nil, "keyboard pressing left again while already p1 should release its claim")
+        -- Keyboard now releases its own p1 claim via the opposite button
+        -- ("right").
+        tap_key(scene, "d")
+        assert(scene.p1_device == nil, "keyboard pressing right (its release button) while p1 should release its claim")
         assert(scene.p1_confirmed == false, "releasing p1's claim should reset p1_confirmed")
 
         -- Re-claim p1 with keyboard -- must start unconfirmed again, not

@@ -1,6 +1,7 @@
 local Scene    = require("lua/core/scene")
 local GameScene = require("game/scenes/game_scene")
 local GameState = require("game/game_state")
+local C        = require("game/constants")
 
 -- Test 1: Scene.new(w, h) passes dimensions to its camera
 do
@@ -55,6 +56,30 @@ do
         "newly-spawned box's spawn_y should equal pile:top_position().y (" .. tostring(expected.y) ..
         ") captured immediately before _spawn_box(), got " .. tostring(new_box.spawn_y))
     print("PASS: scene: _spawn_box() sources spawn_from from the live pile:top_position(), not a fixed constant")
+end
+
+-- Test 5: when GameState.player_count == 2, GameScene:on_enter() spawns a
+-- second Player one grid cell to the right of Player 1, tinted a distinct
+-- color so the two are visually distinguishable in the world.
+do
+    GameState:reset()
+    GameState.player_count = 2
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    assert(gs.player2 ~= nil, "GameScene:on_enter() should construct player2 when GameState.player_count == 2")
+    assert(gs.player2.sprite.x == gs.player.sprite.x + C.SLOT,
+        "player2 should spawn one grid cell (C.SLOT) to the right of player1, got dx=" ..
+        tostring(gs.player2.sprite.x - gs.player.sprite.x))
+    assert(gs.player2.sprite.y == gs.player.sprite.y, "player2 should spawn at the same y as player1")
+
+    local c1, c2 = gs.player.sprite.color, gs.player2.sprite.color
+    assert(c1[1] ~= c2[1] or c1[2] ~= c2[2] or c1[3] ~= c2[3],
+        "player2's sprite color should differ from player1's so the two are visually distinguishable")
+
+    GameState:reset()
+    print("PASS: scene: GameScene spawns a distinctly colored player2 one grid cell right of player1 when player_count == 2")
 end
 
 print("ALL TESTS PASSED")

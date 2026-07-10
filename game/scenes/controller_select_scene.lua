@@ -93,23 +93,26 @@ function ControllerSelectScene:update(dt)
 
     for _, source in ipairs(self._sources) do
         if source.input:pressed("left") then
-            if devices_equal(source.device, self.p1_device) then
-                -- Pressing your own claim's direction again releases it,
-                -- rather than being a silent no-op -- otherwise a claimed
-                -- device has no way to back out without a different device
-                -- stealing the slot out from under it.
-                self.p1_device = nil
-                self.p1_confirmed = false
-            elseif not devices_equal(source.device, self.p2_device) then
-                self.p1_device = source.device
-                self.p1_confirmed = false
-            end
-        end
-        if source.input:pressed("right") then
             if devices_equal(source.device, self.p2_device) then
+                -- Already holds the OTHER slot -- left is P2's release
+                -- button (the opposite of the "right" that claimed it), so a
+                -- claimed device can back out without a different device
+                -- having to steal the slot out from under it.
                 self.p2_device = nil
                 self.p2_confirmed = false
             elseif not devices_equal(source.device, self.p1_device) then
+                self.p1_device = source.device
+                self.p1_confirmed = false
+            end
+            -- Already holding p1_device and pressing left again (its own
+            -- claiming button) is a no-op -- release is always the other
+            -- button, never a second press of the same one.
+        end
+        if source.input:pressed("right") then
+            if devices_equal(source.device, self.p1_device) then
+                self.p1_device = nil
+                self.p1_confirmed = false
+            elseif not devices_equal(source.device, self.p2_device) then
                 self.p2_device = source.device
                 self.p2_confirmed = false
             end
@@ -187,7 +190,7 @@ function ControllerSelectScene:draw()
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf(
-        "P1: Left to claim/release   P2: Right to claim/release   Confirm to ready up (both required to start)",
+        "P1: Left to claim, Right to release   P2: Right to claim, Left to release   Confirm to ready up (both required to start)",
         0, COLUMN_TOP + COLUMN_H + 40, LOGICAL_W, "center"
     )
 end

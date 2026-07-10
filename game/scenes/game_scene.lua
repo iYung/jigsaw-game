@@ -168,6 +168,11 @@ function GameScene:on_enter()
     if GameState.player_count == 2 then
         self.player2 = Player.new(self.player.sprite.x + C.SLOT, self.player.sprite.y,
             self._input_assignments and self._input_assignments.p2)
+        -- Same sprite image as Player 1 -- tint it so the two are visually
+        -- distinguishable in the world instead of looking identical. Warm
+        -- orange/gold rather than blue, since assets/player.png already has
+        -- a blue accent color that a blue tint would wash out.
+        self.player2.sprite.color = { 1, 0.7, 0.25, 1 }
         self.drawer:add(self.player2, 10)
     end
 

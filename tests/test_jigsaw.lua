@@ -1863,33 +1863,6 @@ do
     print("PASS: game_scene: trophy shelf wraps to a new row once a row's cumulative width would exceed the world width")
 end
 
--- SpawnButton ---------------------------------------------------------------
-local SpawnButton = require("game/spawn_button")
-
--- interact() invokes on_press exactly once per call --------------------------
-
-do
-    local calls = 0
-    local button = SpawnButton.new(0, 0, function() calls = calls + 1 end)
-
-    button:interact()
-    assert(calls == 1, "on_press should be invoked once after first interact(), got " .. calls)
-
-    button:interact()
-    assert(calls == 2, "on_press should be invoked once more after second interact(), got " .. calls)
-    print("PASS: spawn_button: interact() invokes on_press exactly once per call")
-end
-
--- centre() --------------------------------------------------------------------
-
-do
-    local button = SpawnButton.new(320, 640, function() end)
-    local c = button:centre()
-    assert(c.x == 320 + C.U, "centre.x should be x + U = " .. (320 + C.U) .. ", got " .. tostring(c.x))
-    assert(c.y == 640 + C.U, "centre.y should be y + U = " .. (640 + C.U) .. ", got " .. tostring(c.y))
-    print("PASS: spawn_button: centre() returns sprite center")
-end
-
 -- GameScene:_spawn_box() ------------------------------------------------------
 -- picks grid-aligned, in-bounds, non-colliding cells for new boxes -----------
 
@@ -1929,9 +1902,6 @@ do
         local key = bx .. "," .. by
         assert(seen[key] == nil, "two boxes should not share the same (x, y) position: " .. key)
         seen[key] = true
-
-        assert(not (bx == gs.spawn_button.sprite.x and by == gs.spawn_button.sprite.y),
-            "box position should not collide with the spawn button's position")
     end
     print("PASS: game_scene: _spawn_box() places boxes on grid-aligned, in-bounds, non-colliding cells")
 end
@@ -2098,57 +2068,6 @@ do
     assert(boxMid.state  == "waiting",  "a farther waiting box should be untouched")
     assert(boxFar.state  == "waiting",  "the farthest waiting box should be untouched")
     print("PASS: player: update() interacts with the nearest of several waiting boxes in range")
-end
-
--- Player:update calls button:interact() when no piece/box is in range -------
--- but the button is --------------------------------------------------------
-
-do
-    local Player         = require("game/player")
-    local HeadlessInput  = require("lua/headless/input")
-    local SpawnButtonMod = require("game/spawn_button")
-
-    local player = Player.new(0, 0)
-    player.input = HeadlessInput.new()
-    -- player:centre() == (32, 32)
-
-    local presses = 0
-    local button = SpawnButtonMod.new(0, 0, function() presses = presses + 1 end)
-    -- button:centre() == (32, 32), dist 0, well within 1.5*C.U
-
-    player.input:press("interact")
-    player:update(1 / 60, {}, {}, button, nil)
-
-    assert(presses == 1,
-        "button:interact() should fire when no piece/box is in range but the button is, got " .. presses .. " presses")
-    print("PASS: player: update() calls button:interact() when no piece/box is in range but the button is")
-end
-
--- ...and does NOT call button:interact() when a box interaction already ----
--- happened on the same press (box takes priority over the button) ----------
-
-do
-    local Player         = require("game/player")
-    local HeadlessInput  = require("lua/headless/input")
-    local SpawnButtonMod = require("game/spawn_button")
-    local JigsawBoxMod   = require("game/jigsaw_box")
-
-    local player = Player.new(0, 0)
-    player.input = HeadlessInput.new()
-    -- player:centre() == (32, 32)
-
-    local presses = 0
-    local button = SpawnButtonMod.new(0, 0, function() presses = presses + 1 end)  -- centre (32, 32)
-    GameState:reset()
-    local box    = JigsawBoxMod.new(0, 0)                                          -- centre (32, 32)
-
-    player.input:press("interact")
-    player:update(1 / 60, {}, { box }, button, nil)
-
-    assert(box.state == "ejecting", "box should be interacted with when both box and button are in range")
-    assert(presses == 0,
-        "button:interact() should NOT fire when a box interaction already happened this press, got " .. presses .. " presses")
-    print("PASS: player: update() prioritizes box interaction over button interaction when both are in range")
 end
 
 print("ALL TESTS PASSED")

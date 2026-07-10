@@ -23,7 +23,7 @@ function Player.new(x, y)
     return self
 end
 
-function Player:update(dt, pieces, boxes, button, drawer)
+function Player:update(dt, pieces, boxes, pile, drawer)
     self.input:update()
     local s = self.sprite
     if self.input:is_down("left")  then s.x = s.x - SPEED * dt end
@@ -104,12 +104,12 @@ function Player:update(dt, pieces, boxes, button, drawer)
                     box_interacted = true
                 end
             end
-            if self.held_piece == nil and not box_interacted and button ~= nil then
-                local bc = button:centre()
+            if self.held_piece == nil and not box_interacted and pile ~= nil then
+                local bc = pile:centre()
                 local dx = bc.x - centre.x
                 local dy = bc.y - centre.y
                 if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
-                    button:interact()
+                    pile:interact()
                 end
             end
         end

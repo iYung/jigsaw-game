@@ -1,4 +1,4 @@
-// Rounded-corner mask shader, shared by jigsaw pieces and the trophy shelf.
+// Rounded-corner mask shader, used by the completed-puzzle trophy shelf.
 //
 // RADIUS is a fixed, hardcoded constant -- it never varies and is never sent
 // as a uniform. `size` is the only per-draw-target quantity: the drawable's

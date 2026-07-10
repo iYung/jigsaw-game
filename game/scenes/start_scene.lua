@@ -1,6 +1,7 @@
 local Scene     = require("lua/core/scene")
 local Input     = require("lua/core/input")
 local GameScene = require("game/scenes/game_scene")
+local ControllerSelectScene = require("game/scenes/controller_select_scene")
 local Save      = require("lua/core/save")
 local GameState = require("game/game_state")
 
@@ -73,13 +74,21 @@ function StartScene:_confirm()
     if self.selected == 1 then
         GameState:reset()
         GameState.player_count = self.player_count
-        self.manager:switch(GameScene.new())
+        if self.player_count == 2 then
+            self.manager:switch(ControllerSelectScene.new(self.manager))
+        else
+            self.manager:switch(GameScene.new())
+        end
     elseif self.selected == 2 then
         if not self._has_save then return end
         local data = Save.read()
         if not data then return end
         GameState:apply_save(data.game_state)
-        self.manager:switch(GameScene.new(data.scene))
+        if GameState.player_count == 2 then
+            self.manager:switch(ControllerSelectScene.new(self.manager, data.scene))
+        else
+            self.manager:switch(GameScene.new(data.scene))
+        end
     elseif self.selected == 4 then
         love.event.quit()
     end

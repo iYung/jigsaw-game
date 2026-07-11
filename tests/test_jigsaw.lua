@@ -2068,11 +2068,19 @@ do
         "shelved entry.y should be -(SLOT + rows*SLOT), got " .. tostring(shelved.y))
     assert(shelved.x == 0, "the first-ever shelved puzzle should be placed at x = 0, got " .. tostring(shelved.x))
 
-    local found_in_drawer = false
+    local found_in_drawer, shelved_priority = false, nil
     for _, layer_entry in ipairs(gs.drawer.layers) do
-        if layer_entry.sprite == shelved then found_in_drawer = true end
+        if layer_entry.sprite == shelved then
+            found_in_drawer = true
+            shelved_priority = layer_entry.priority
+        end
     end
     assert(found_in_drawer, "shelved entry should be added to the drawer so it renders on the trophy shelf")
+    assert(shelved_priority == C.PRIORITY_SHELF,
+        "a live-shelved entry (_shelve()) should be added to the drawer at C.PRIORITY_SHELF (" ..
+        C.PRIORITY_SHELF .. "), got " .. tostring(shelved_priority))
+    assert(C.PRIORITY_SHELF < C.PRIORITY_PIECE,
+        "C.PRIORITY_SHELF must stay below C.PRIORITY_PIECE so the pile always draws in front of the shelf")
     assert(shelved.shader ~= nil, "shelved entry should carry a non-nil shader for rounded corners")
 
     -- Solve and fade a second, differently-sized puzzle; it should land to
@@ -2409,6 +2417,59 @@ do
     local ok, err = pcall(function() gs.floor.draw() end)
     assert(ok, "gs.floor.draw() should not error under the headless love.graphics stub: " .. tostring(err))
     print("PASS: game_scene: on_enter() halves world size and replaces self.ground with self.floor (checkerboard, priority 0)")
+end
+
+-- shelved entries restored from save data draw at C.PRIORITY_SHELF ----------
+-- GameScene:on_enter()'s save-data restore branch rebuilds each entry in
+-- self._save_data.completed_puzzles and adds it to the drawer; this must use
+-- C.PRIORITY_SHELF (not C.PRIORITY_PIECE), same as the live-shelved path via
+-- GameScene:_shelve(), so the pile always draws in front of the shelf
+-- (docs/design/pile-of-boxes-in-front-of-shelf.md).
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local save_data = {
+        player = { x = 0, y = 0, held_piece = nil },
+        pieces = {},
+        boxes = {},
+        completed_puzzles = {
+            { path = "assets/puzzles/easy/1.png", x = 0, y = -192, cols = 3, rows = 3 },
+        },
+        shelf_row_x = 0,
+        shelf_row_bottom = -192,
+        shelf_row_max_height = 192,
+    }
+
+    local gs = GameScene.new(save_data)
+    gs:on_enter()
+
+    assert(#gs.completed_puzzles == 1,
+        "one shelved entry should be restored from save data, got " .. #gs.completed_puzzles)
+    local shelved = gs.completed_puzzles[1]
+
+    local found_in_drawer, shelved_priority = false, nil
+    for _, entry in ipairs(gs.drawer.layers) do
+        if entry.sprite == shelved then
+            found_in_drawer = true
+            shelved_priority = entry.priority
+        end
+    end
+    assert(found_in_drawer, "the restored shelved entry should be added to the drawer")
+    assert(shelved_priority == C.PRIORITY_SHELF,
+        "a shelved entry restored from save data should be added to the drawer at C.PRIORITY_SHELF (" ..
+        C.PRIORITY_SHELF .. "), got " .. tostring(shelved_priority))
+
+    local pile_priority = nil
+    for _, entry in ipairs(gs.drawer.layers) do
+        if entry.sprite == gs.pile then pile_priority = entry.priority end
+    end
+    assert(pile_priority == C.PRIORITY_PIECE,
+        "sanity check: the pile should remain at C.PRIORITY_PIECE, got " .. tostring(pile_priority))
+    assert(pile_priority > shelved_priority,
+        "the pile's priority must be greater than a restored shelved entry's so the pile draws in front")
+    print("PASS: game_scene: on_enter() restores save-data shelved entries at C.PRIORITY_SHELF, below the pile")
 end
 
 -- world background --------------------------------------------------------

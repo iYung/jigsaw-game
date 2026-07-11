@@ -98,7 +98,7 @@ function StartScene:_confirm()
         local data = Save.read()
         if not data then return end
         GameState:apply_save(data.game_state)
-        GameState.player_count = _clamp_player_count(GameState.player_count)
+        GameState.player_count = _clamp_player_count(self.player_count)
         if GameState.player_count == 2 then
             self.manager:switch(ControllerSelectScene.new(self.manager, data.scene))
         else

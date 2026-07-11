@@ -683,15 +683,65 @@ do
     print("PASS: start_scene: confirming Continue restoring player_count == 1 switches to a GameScene with scene data threaded through")
 end
 
--- Test 21: confirming Continue where the loaded save's game_state.player_count
--- is 2 switches to a ControllerSelectScene instead of a GameScene, with the
+-- Test 21: confirming Continue with the start-screen "Players" toggle cycled
+-- to 2 switches to a ControllerSelectScene instead of a GameScene, with the
 -- save's scene data threaded through to it (per
 -- ControllerSelectScene.new(manager, save_data)'s contract, mirrored the same
--- way Test 20 verifies scene-data threading for GameScene). Requires a
--- connected controller at confirm time -- a restored 2P save is subject to
--- the same confirm-time clamp (Test 14d) as a freshly toggled one, since a
--- save's player_count says nothing about whether a controller is plugged in
--- *now*.
+-- way Test 20 verifies scene-data threading for GameScene). The live toggle
+-- -- not the save's own game_state.player_count -- is what governs this
+-- routing decision (mirrors Test 19's New Game pattern), since StartScene is
+-- freshly constructed on every visit to the menu and self.player_count
+-- always reflects the player's current, explicit choice rather than
+-- whatever was true when the save was written. Requires a connected
+-- controller at confirm time -- a live 2P toggle is subject to the same
+-- confirm-time clamp (Test 14d) as a restored one.
+do
+    reset_fs()
+    local save = make_save()
+    Save.write(save)
+    GameState:reset()
+
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local scene = StartScene.new(manager)
+
+    with_joysticks({ fake_stick() }, function()
+        scene:on_enter()
+        assert(scene._has_save == true, "sanity: _has_save should be true with a save file present")
+
+        scene.selected = 3
+        tap(scene, "d")
+        assert(scene.player_count == 2,
+            "sanity: toggling right should set player_count to 2, got " .. tostring(scene.player_count))
+
+        scene.selected = 2
+        tap(scene, "return")
+    end)
+
+    assert(switched_with ~= nil, "manager:switch should have been called when confirming Continue")
+    assert(GameState.player_count == 2,
+        "confirming Continue with the Players toggle at 2 and a controller connected should set GameState.player_count to 2, got " .. tostring(GameState.player_count))
+    assert(switched_with.escape_to_menu == true,
+        "Continue with the Players toggle at 2 should switch to a ControllerSelectScene (missing escape_to_menu == true marker)")
+    -- Same round-trip caveat as Test 20: compare field values, not table
+    -- identity, since Save.write()/Save.read() serialize through a Lua chunk.
+    assert(switched_with._save_data ~= nil, "Continue should thread the save's scene data through to ControllerSelectScene.new via _save_data")
+    assert(switched_with._save_data.player.x == 320,
+        "Continue's threaded scene data should preserve player.x from the save, got " .. tostring(switched_with._save_data.player.x))
+    assert(switched_with._save_data.player.y == 192,
+        "Continue's threaded scene data should preserve player.y from the save, got " .. tostring(switched_with._save_data.player.y))
+
+    GameState:reset()
+    print("PASS: start_scene: confirming Continue with the Players toggle at 2 switches to a ControllerSelectScene with scene data threaded through")
+end
+
+-- Test 21c: confirming Continue where the loaded save's own
+-- game_state.player_count is 2 but the start-screen Players toggle was left
+-- at its default of 1 goes straight to a GameScene (1P), not
+-- ControllerSelectScene -- proving the live toggle governs this routing
+-- decision, not whatever player_count happened to be persisted in the save.
 do
     reset_fs()
     local save = make_save()
@@ -706,6 +756,7 @@ do
     local scene = StartScene.new(manager)
     scene:on_enter()
     assert(scene._has_save == true, "sanity: _has_save should be true with a save file present")
+    assert(scene.player_count == 1, "sanity: player_count toggle should default to 1")
 
     scene.selected = 2
     with_joysticks({ fake_stick() }, function()
@@ -713,20 +764,13 @@ do
     end)
 
     assert(switched_with ~= nil, "manager:switch should have been called when confirming Continue")
-    assert(GameState.player_count == 2,
-        "confirming Continue with a controller connected should restore GameState.player_count from the save, got " .. tostring(GameState.player_count))
-    assert(switched_with.escape_to_menu == true,
-        "Continue restoring player_count == 2 should switch to a ControllerSelectScene (missing escape_to_menu == true marker)")
-    -- Same round-trip caveat as Test 20: compare field values, not table
-    -- identity, since Save.write()/Save.read() serialize through a Lua chunk.
-    assert(switched_with._save_data ~= nil, "Continue should thread the save's scene data through to ControllerSelectScene.new via _save_data")
-    assert(switched_with._save_data.player.x == 320,
-        "Continue's threaded scene data should preserve player.x from the save, got " .. tostring(switched_with._save_data.player.x))
-    assert(switched_with._save_data.player.y == 192,
-        "Continue's threaded scene data should preserve player.y from the save, got " .. tostring(switched_with._save_data.player.y))
+    assert(GameState.player_count == 1,
+        "confirming Continue with the Players toggle left at 1 should not adopt the save's player_count == 2, got " .. tostring(GameState.player_count))
+    assert(switched_with.escape_to_menu == nil,
+        "Continue with the Players toggle left at 1 should switch to a GameScene, not a ControllerSelectScene, even though the save's player_count == 2")
 
     GameState:reset()
-    print("PASS: start_scene: confirming Continue restoring player_count == 2 switches to a ControllerSelectScene with scene data threaded through")
+    print("PASS: start_scene: confirming Continue with the Players toggle left at 1 ignores the save's player_count == 2 and switches to a GameScene")
 end
 
 -- Test 21b: confirming Continue where the loaded save's game_state.player_count

@@ -42,6 +42,7 @@ graphics_stub.setShader        = noop
 graphics_stub.newShader        = function(path) return { send = noop } end
 graphics_stub.setBlendMode     = noop
 graphics_stub.setFilter        = noop
+graphics_stub.setScissor       = noop
 graphics_stub.draw             = noop
 graphics_stub.rectangle        = noop
 graphics_stub.print            = noop

@@ -1,19 +1,21 @@
 local Camera = {}
 Camera.__index = Camera
 
-function Camera.new(x, y, w, h)
+function Camera.new(x, y, w, h, screen_x, screen_y)
     local self = setmetatable({}, Camera)
-    self.x     = x or 0
-    self.y     = y or 0
-    self._w    = w or 1280
-    self._h    = h or 720
-    self.zoom  = 1.0
+    self.x        = x or 0
+    self.y        = y or 0
+    self._w       = w or 1280
+    self._h       = h or 720
+    self.zoom     = 1.0
+    self.screen_x = screen_x or 0
+    self.screen_y = screen_y or 0
     return self
 end
 
 function Camera:attach()
     love.graphics.push()
-    love.graphics.translate(self._w / 2, self._h / 2)
+    love.graphics.translate(self.screen_x + self._w / 2, self.screen_y + self._h / 2)
     love.graphics.scale(self.zoom)
     love.graphics.translate(-self.x, -self.y)
 end

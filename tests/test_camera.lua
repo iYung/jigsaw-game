@@ -26,4 +26,28 @@ do
     print("PASS: camera: position and dimensions stored independently")
 end
 
+-- Test 4: default screen_x/screen_y are 0 when omitted
+do
+    local c = Camera.new(0, 0, 1280, 720)
+    assert(c.screen_x == 0, "default screen_x should be 0, got " .. tostring(c.screen_x))
+    assert(c.screen_y == 0, "default screen_y should be 0, got " .. tostring(c.screen_y))
+    print("PASS: camera: default screen_x/screen_y are 0")
+end
+
+-- Test 5: custom screen_x/screen_y are stored (screen_x, screen_y = 640, 0)
+do
+    local c = Camera.new(0, 0, 640, 720, 640, 0)
+    assert(c.screen_x == 640, "screen_x should be 640, got " .. tostring(c.screen_x))
+    assert(c.screen_y == 0,   "screen_y should be 0, got "   .. tostring(c.screen_y))
+    print("PASS: camera: custom screen_x stored correctly")
+end
+
+-- Test 6: screen_x/screen_y are stored independently (screen_x, screen_y = 0, 360)
+do
+    local c = Camera.new(0, 0, 640, 720, 0, 360)
+    assert(c.screen_x == 0,   "screen_x should be 0, got "   .. tostring(c.screen_x))
+    assert(c.screen_y == 360, "screen_y should be 360, got " .. tostring(c.screen_y))
+    print("PASS: camera: screen_x/screen_y stored independently")
+end
+
 print("ALL TESTS PASSED")

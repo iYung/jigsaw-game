@@ -217,10 +217,6 @@ do
         -- pass; P2's device has not confirmed yet.
         assert(switched_with == nil, "both claimed but only P1 confirmed should not call manager:switch")
 
-        -- P1 (keyboard) confirming again should not fake out P2's requirement.
-        tap_key(scene, "return")
-        assert(switched_with == nil, "P1 alone re-confirming must not substitute for P2's own confirm")
-
         -- Now P2 (controller 1) confirms -- both have now individually
         -- confirmed, so the game should start.
         tap_button(scene, c1_buttons, "a")
@@ -229,6 +225,45 @@ do
         assert(switched_with.drawer ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .drawer)")
 
         print("PASS: controller_select_scene: manager:switch fires only once both devices are claimed AND both have individually confirmed")
+    end)
+end
+
+-- Test 4a: confirm toggles rather than only ever setting true -- pressing
+-- confirm a second time while already confirmed un-readies that player,
+-- so a mistaken confirm (or a player wanting to swap devices) doesn't
+-- require releasing and re-claiming the slot. Also confirms P1 toggling
+-- off/on doesn't fake out or otherwise disturb P2's independent state.
+do
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local c1_buttons = {}
+
+    with_joysticks({ fake_stick(c1_buttons) }, function()
+        local scene = ControllerSelectScene.new(manager)
+        scene:on_enter()
+
+        tap_key(scene, "a") -- keyboard claims p1
+        tap_button(scene, c1_buttons, "dpright") -- controller 1 claims p2
+
+        tap_key(scene, "return") -- p1 confirms
+        assert(scene.p1_confirmed == true, "sanity: p1 should be confirmed after its first confirm press")
+
+        tap_key(scene, "return") -- p1 confirms again -- should un-ready, not re-confirm
+        assert(scene.p1_confirmed == false,
+            "a second confirm press from the same still-claiming device should toggle p1_confirmed back to false")
+        assert(switched_with == nil, "manager:switch must not fire while p1 is toggled back to unconfirmed")
+
+        tap_button(scene, c1_buttons, "a") -- p2 confirms -- must not start yet, since p1 is currently unconfirmed
+        assert(scene.p2_confirmed == true, "sanity: p2 should be confirmed")
+        assert(switched_with == nil, "manager:switch must not fire while p1 is unconfirmed, even though p2 just confirmed")
+
+        tap_key(scene, "return") -- p1 confirms again -- now both are confirmed
+        assert(scene.p1_confirmed == true, "sanity: p1 should be confirmed again after toggling back on")
+        assert(switched_with ~= nil, "manager:switch should fire once both players are (re-)confirmed")
+
+        print("PASS: controller_select_scene: confirm toggles a player's ready state instead of only ever setting it true")
     end)
 end
 

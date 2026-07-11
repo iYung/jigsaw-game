@@ -120,16 +120,18 @@ function ControllerSelectScene:update(dt)
     end
 
     -- Each player readies up independently -- only the device actually
-    -- claiming a slot can set that slot's confirmed flag, so one player
+    -- claiming a slot can toggle that slot's confirmed flag, so one player
     -- mashing confirm can never start the game before the other player has
-    -- also confirmed.
+    -- also confirmed. Confirm toggles rather than only ever setting true, so
+    -- a player can un-ready themselves (e.g. to swap devices) without
+    -- having to release and re-claim their slot.
     for _, source in ipairs(self._sources) do
         if source.input:pressed("confirm") then
             if devices_equal(source.device, self.p1_device) then
-                self.p1_confirmed = true
+                self.p1_confirmed = not self.p1_confirmed
             end
             if devices_equal(source.device, self.p2_device) then
-                self.p2_confirmed = true
+                self.p2_confirmed = not self.p2_confirmed
             end
         end
     end
@@ -190,7 +192,7 @@ function ControllerSelectScene:draw()
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf(
-        "P1: Left to claim, Right to release   P2: Right to claim, Left to release   Confirm to ready up (both required to start)",
+        "P1: Left to claim, Right to release   P2: Right to claim, Left to release   Confirm to toggle ready (both required to start)",
         0, COLUMN_TOP + COLUMN_H + 40, LOGICAL_W, "center"
     )
 end

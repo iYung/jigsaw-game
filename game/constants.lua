@@ -4,6 +4,10 @@ local SLOT = 2 * U
 -- Drawer priority for grounded jigsaw pieces and the jigsaw box.
 local PRIORITY_PIECE = 5
 
+-- Drawer priority for shelved/completed-puzzle entries, kept below
+-- PRIORITY_PIECE so the pile always draws in front of the shelf.
+local PRIORITY_SHELF = 4
+
 -- Drawer priority for a jigsaw box mid-"flying" pile-to-slot animation only
 -- (not the "ejecting" or "waiting" states), so it draws above the player.
 local PRIORITY_BOX_FLYING = 20
@@ -24,6 +28,7 @@ return {
     U = U,
     SLOT = SLOT,
     PRIORITY_PIECE = PRIORITY_PIECE,
+    PRIORITY_SHELF = PRIORITY_SHELF,
     PRIORITY_BOX_FLYING = PRIORITY_BOX_FLYING,
     GAMEPAD_DEADZONE = GAMEPAD_DEADZONE,
     BG_W = BG_W,

@@ -133,7 +133,7 @@ function GameScene:on_enter()
                 end,
             }
             self.completed_puzzles[#self.completed_puzzles + 1] = shelved
-            self.drawer:add(shelved, C.PRIORITY_PIECE)
+            self.drawer:add(shelved, C.PRIORITY_SHELF)
         end
 
         -- (g) restore the shelf cursor
@@ -387,7 +387,7 @@ function GameScene:_shelve(entry)
         end,
     }
     self.completed_puzzles[#self.completed_puzzles + 1] = shelved
-    self.drawer:add(shelved, C.PRIORITY_PIECE)
+    self.drawer:add(shelved, C.PRIORITY_SHELF)
 
     self.shelf_row_x = self.shelf_row_x + width + C.SLOT
     self.shelf_row_max_height = math.max(self.shelf_row_max_height, height)

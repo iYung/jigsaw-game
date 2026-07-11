@@ -310,6 +310,41 @@ do
     end)
 end
 
+-- Test 4c: _unclaimed_sources() (backing the middle legend column) omits a
+-- device the instant either player claims it, and reinserts it the instant
+-- it's released -- claimed devices should not still be offered as available.
+do
+    local c1_buttons = {}
+    with_joysticks({ fake_stick(c1_buttons) }, function()
+        local scene = ControllerSelectScene.new({})
+        scene:on_enter()
+
+        local function labels()
+            local set = {}
+            for _, source in ipairs(scene:_unclaimed_sources()) do
+                set[source.label] = true
+            end
+            return set
+        end
+
+        assert(labels()["Keyboard"] == true, "sanity: Keyboard should be unclaimed and listed before anyone claims it")
+        assert(labels()["Controller 1"] == true, "sanity: Controller 1 should be unclaimed and listed before anyone claims it")
+
+        tap_key(scene, "a") -- keyboard claims p1
+        assert(labels()["Keyboard"] == nil, "Keyboard should drop out of the unclaimed list once claimed by p1")
+        assert(labels()["Controller 1"] == true, "Controller 1 should remain listed -- it hasn't been claimed")
+
+        tap_button(scene, c1_buttons, "dpright") -- controller 1 claims p2
+        assert(labels()["Controller 1"] == nil, "Controller 1 should drop out of the unclaimed list once claimed by p2")
+
+        tap_key(scene, "d") -- keyboard (p1) releases via the opposite button
+        assert(labels()["Keyboard"] == true, "Keyboard should reappear in the unclaimed list the instant p1 releases it")
+        assert(labels()["Controller 1"] == nil, "Controller 1 should still be omitted -- it's still claimed by p2")
+
+        print("PASS: controller_select_scene: _unclaimed_sources() omits claimed devices and reinserts released ones")
+    end)
+end
+
 -- Test 5: a fresh ControllerSelectScene.new(manager) has escape_to_menu == true.
 do
     local scene = ControllerSelectScene.new({})

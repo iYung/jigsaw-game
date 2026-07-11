@@ -153,6 +153,19 @@ local function _label_for(device, sources)
     return "-"
 end
 
+-- Returns a new array of self._sources entries whose device isn't currently
+-- claimed by either player -- used by draw() to drop a claimed device out
+-- of the middle legend column, and reinsert it the instant it's released.
+function ControllerSelectScene:_unclaimed_sources()
+    local result = {}
+    for _, source in ipairs(self._sources) do
+        if not devices_equal(source.device, self.p1_device) and not devices_equal(source.device, self.p2_device) then
+            result[#result + 1] = source
+        end
+    end
+    return result
+end
+
 function ControllerSelectScene:draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Choose Your Controller", 0, 140, LOGICAL_W, "center")
@@ -176,7 +189,7 @@ function ControllerSelectScene:draw()
     love.graphics.rectangle("fill", mid_x, COLUMN_TOP, COLUMN_W, COLUMN_H)
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Devices", mid_x, COLUMN_TOP + 20, COLUMN_W, "center")
-    for i, source in ipairs(self._sources) do
+    for i, source in ipairs(self:_unclaimed_sources()) do
         love.graphics.printf(source.label, mid_x, COLUMN_TOP + 20 + i * 30, COLUMN_W, "center")
     end
 

@@ -78,8 +78,29 @@ do
     assert(c1[1] ~= c2[1] or c1[2] ~= c2[2] or c1[3] ~= c2[3],
         "player2's sprite color should differ from player1's so the two are visually distinguishable")
 
+    assert(gs.camera2 ~= nil, "GameScene:on_enter() should construct camera2 when GameState.player_count == 2")
+    assert(gs.camera2._w == 640, "camera2._w should be 640, got " .. tostring(gs.camera2._w))
+    assert(gs.camera2.screen_x == 640, "camera2.screen_x should be 640, got " .. tostring(gs.camera2.screen_x))
+    assert(gs.camera._w == 640, "camera._w should be shrunk to 640 in 2-player mode, got " .. tostring(gs.camera._w))
+
     GameState:reset()
     print("PASS: scene: GameScene spawns a distinctly colored player2 one grid cell right of player1 when player_count == 2")
+end
+
+-- Test 6: in 1-player mode (the default), GameScene:on_enter() should not
+-- set up a second camera, and the main camera should retain the full
+-- 1280-wide canvas -- unchanged from today.
+do
+    GameState:reset()
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    assert(gs.camera2 == nil, "GameScene:on_enter() should not construct camera2 in 1-player mode")
+    assert(gs.camera._w == 1280, "camera._w should remain 1280 in 1-player mode, got " .. tostring(gs.camera._w))
+
+    GameState:reset()
+    print("PASS: scene: GameScene keeps a single full-width camera in 1-player mode")
 end
 
 print("ALL TESTS PASSED")

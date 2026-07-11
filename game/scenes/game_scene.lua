@@ -1,6 +1,7 @@
 local Scene      = require("lua/core/scene")
 local Sprite     = require("lua/core/sprite")
 local Shader     = require("lua/core/shader")
+local Camera     = require("lua/core/camera")
 local Player     = require("game/player")
 local C          = require("game/constants")
 local JigsawBox  = require("game/jigsaw_box")
@@ -174,6 +175,8 @@ function GameScene:on_enter()
         -- a blue accent color that a blue tint would wash out.
         self.player2.sprite.color = { 1, 0.7, 0.25, 1 }
         self.drawer:add(self.player2, 10)
+        self.camera._w = 640
+        self.camera2 = Camera.new(0, 0, 640, 720, 640, 0)
     end
 
     self.pile = PuzzlePile.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
@@ -301,15 +304,36 @@ function GameScene:update(dt)
     end
 
     self.camera:follow(self.player:centre(), 0.85)
+    if self.camera2 then self.camera2:follow(self.player2:centre(), 0.85) end
 end
 
 function GameScene:draw()
-    Scene.draw(self)
+    if self.camera2 == nil then
+        Scene.draw(self)
+    else
+        love.graphics.setScissor(0, 0, 640, 720)
+        self.camera:attach()
+        self.drawer:draw()
+        self.camera:detach()
+
+        love.graphics.setScissor(640, 0, 640, 720)
+        self.camera2:attach()
+        self.drawer:draw()
+        self.camera2:detach()
+
+        love.graphics.setScissor()
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.line(640, 0, 640, 720)
+    end
 
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.print("WASD: move   E: pick up / drop   R: rotate   ESC: save & menu", 16, 16)
     local c = self.player:centre()
     love.graphics.print(string.format("player (%.0f, %.0f)", c.x, c.y), 16, 36)
+    if self.camera2 then
+        local c2 = self.player2:centre()
+        love.graphics.print(string.format("player (%.0f, %.0f)", c2.x, c2.y), 656, 36)
+    end
 end
 
 -- Forwards to Scene:on_exit() (clears self.drawer) -- GameScene doesn't chain

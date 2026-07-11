@@ -12,6 +12,28 @@ love.filesystem.getInfo = function(path) return _fs[path] and { type = "file" } 
 
 local function reset_fs() _fs = {} end
 
+-- Builds a fake joystick, matching tests/test_input_gamepad.lua's helper --
+-- duplicated locally per this repo's no-shared-test-helpers convention.
+local function fake_stick()
+    return {
+        isGamepadDown = function() return false end,
+        getGamepadAxis = function() return 0 end,
+    }
+end
+
+-- Monkey-patches love.joystick.getJoysticks to return `sticks` for the
+-- duration of fn(), then restores the original stub (mirrors
+-- tests/test_input_gamepad.lua's with_joysticks).
+local function with_joysticks(sticks, fn)
+    local original = love.joystick.getJoysticks
+    love.joystick.getJoysticks = function() return sticks end
+    local ok, err = pcall(fn)
+    love.joystick.getJoysticks = original
+    if not ok then
+        error(err, 0)
+    end
+end
+
 -- StartScene owns a *real* lua/core/input.lua instance (not HeadlessInput —
 -- HeadlessInput only gets wired in via lua/headless/runner.lua's
 -- runner.setup(scene_factory), which injects (input, sm) into the factory,
@@ -317,68 +339,103 @@ end
 -- Test 14: navigating to the Players row (index 3) and pressing right
 -- toggles player_count from 1 -> 2; pressing left toggles it back to 1. The
 -- "Players: N" label (items[3]) stays in sync with the toggled value.
+-- Requires a connected controller (see Test 14b) -- wrapped in
+-- with_joysticks so the toggle is actually allowed to reach 2.
+do
+    reset_fs()
+    with_joysticks({ fake_stick() }, function()
+        local manager = {}
+        local scene = StartScene.new(manager)
+        scene:on_enter()
+
+        tap(scene, "s")
+        assert(scene.selected == 3,
+            "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+
+        tap(scene, "d")
+        assert(scene.player_count == 2,
+            "pressing right on Players row should toggle player_count to 2, got " .. tostring(scene.player_count))
+        assert(scene.items[3] == "Players: 2",
+            "items[3] should read 'Players: 2' after toggling, got " .. tostring(scene.items[3]))
+
+        tap(scene, "a")
+        assert(scene.player_count == 1,
+            "pressing left on Players row should toggle player_count back to 1, got " .. tostring(scene.player_count))
+        assert(scene.items[3] == "Players: 1",
+            "items[3] should read 'Players: 1' after toggling back, got " .. tostring(scene.items[3]))
+    end)
+
+    print("PASS: start_scene: left/right on Players row toggles player_count between 1 and 2")
+end
+
+-- Test 14b: with no controller connected (the default in this test file's
+-- headless environment), pressing left/right/confirm on the Players row
+-- does not toggle player_count past 1 -- 2P requires a second physical
+-- input device, so the toggle is disabled without one.
 do
     reset_fs()
     local manager = {}
     local scene = StartScene.new(manager)
     scene:on_enter()
+    assert(scene._has_controller == false, "sanity: no controller should be detected in this test's headless environment")
 
     tap(scene, "s")
     assert(scene.selected == 3,
         "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
 
     tap(scene, "d")
-    assert(scene.player_count == 2,
-        "pressing right on Players row should toggle player_count to 2, got " .. tostring(scene.player_count))
-    assert(scene.items[3] == "Players: 2",
-        "items[3] should read 'Players: 2' after toggling, got " .. tostring(scene.items[3]))
-
-    tap(scene, "a")
     assert(scene.player_count == 1,
-        "pressing left on Players row should toggle player_count back to 1, got " .. tostring(scene.player_count))
+        "pressing right on Players row with no controller connected should not toggle player_count, got " .. tostring(scene.player_count))
     assert(scene.items[3] == "Players: 1",
-        "items[3] should read 'Players: 1' after toggling back, got " .. tostring(scene.items[3]))
+        "items[3] should stay 'Players: 1' with no controller connected, got " .. tostring(scene.items[3]))
 
-    print("PASS: start_scene: left/right on Players row toggles player_count between 1 and 2")
+    tap(scene, "return")
+    assert(scene.player_count == 1,
+        "confirming on Players row with no controller connected should not toggle player_count, got " .. tostring(scene.player_count))
+
+    print("PASS: start_scene: Players row toggle is disabled with no controller connected")
 end
 
--- Test 15: confirming while the Players row (3) is selected toggles
--- player_count instead of running _confirm()'s normal per-index branch --
--- manager:switch and love.event.quit must never fire from this row.
+-- Test 14c: navigating away from the Players row after toggling to 2 must
+-- NOT silently revert player_count back to 1 just because a later update()
+-- tick happens to see no controller (e.g. a one-frame joystick-enumeration
+-- hiccup while merely moving the selection cursor) -- only an explicit
+-- toggle keypress or the confirm-time clamp (Test 14d) may change
+-- player_count. This guards against the exact bug class this test replaced:
+-- a continuous per-frame recheck used to zero out a deliberate 2P
+-- selection before the player ever reached confirm.
 do
     reset_fs()
-    local switched_with = nil
-    local manager = {
-        switch = function(self, scene) switched_with = scene end,
-    }
+    local manager = {}
     local scene = StartScene.new(manager)
     scene:on_enter()
 
-    tap(scene, "s")
-    assert(scene.selected == 3,
-        "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+    with_joysticks({ fake_stick() }, function()
+        tap(scene, "s")
+        tap(scene, "d")
+        assert(scene.player_count == 2, "sanity: toggling right with a controller connected should set player_count to 2")
+    end)
 
-    local quit_called = false
-    local original_quit = love.event.quit
-    love.event.quit = function(...) quit_called = true end
-
-    tap(scene, "return")
-
-    love.event.quit = original_quit
-
+    -- with_joysticks above has restored this test file's default,
+    -- always-empty headless stub. Navigate away from the Players row (as a
+    -- real player would while heading to New Game) -- several plain
+    -- update() ticks with no controller present must not touch
+    -- player_count.
+    tap(scene, "up")
+    scene:update(1 / 60)
+    scene:update(1 / 60)
     assert(scene.player_count == 2,
-        "confirming on Players row should toggle player_count to 2, got " .. tostring(scene.player_count))
-    assert(switched_with == nil, "confirming on Players row should never call manager:switch")
-    assert(not quit_called, "confirming on Players row should never call love.event.quit")
+        "player_count must not be silently reverted by later update() ticks with no controller present, got " .. tostring(scene.player_count))
+    assert(scene.items[3] == "Players: 2",
+        "items[3] must stay 'Players: 2' -- only an explicit toggle or confirm-time clamp may change it, got " .. tostring(scene.items[3]))
 
-    print("PASS: start_scene: confirming on Players row toggles player_count instead of switching or quitting")
+    print("PASS: start_scene: player_count is not silently reverted by later update() ticks after navigating away from the Players row")
 end
 
--- Test 16: toggling Players to 2 then confirming New Game carries the value
--- onto GameState.player_count -- start_scene.lua's _confirm branch for
--- selected == 1 runs GameState:reset() first and then assigns
--- GameState.player_count = self.player_count, so the toggled value survives
--- the reset.
+-- Test 14d: confirming New Game with player_count toggled to 2 but no
+-- controller connected at confirm time falls back to 1P (GameState.player_count
+-- == 1, switches to GameScene) instead of routing to a ControllerSelectScene
+-- with nothing to claim a second device.
 do
     reset_fs()
     GameState:reset()
@@ -388,21 +445,98 @@ do
         switch = function(self, scene) switched_with = scene end,
     }
     local scene = StartScene.new(manager)
-    scene:on_enter()
 
-    tap(scene, "s")
-    assert(scene.selected == 3,
-        "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+    with_joysticks({ fake_stick() }, function()
+        scene:on_enter()
+        tap(scene, "s")
+        tap(scene, "d")
+        assert(scene.player_count == 2, "sanity: toggling right with a controller connected should set player_count to 2")
+        tap(scene, "up")
+    end)
 
-    tap(scene, "d")
-    assert(scene.player_count == 2,
-        "sanity: toggling right should set player_count to 2, got " .. tostring(scene.player_count))
-
-    tap(scene, "up")
-    assert(scene.selected == 1,
-        "sanity: up from Players (3) with no save should skip Continue and land back on New Game (1), got " .. tostring(scene.selected))
-
+    -- Controller gone by the time New Game is confirmed.
     tap(scene, "return")
+
+    assert(switched_with ~= nil, "confirming New Game should have called manager:switch")
+    assert(GameState.player_count == 1,
+        "confirming New Game with no controller connected should clamp GameState.player_count to 1, got " .. tostring(GameState.player_count))
+    assert(switched_with.escape_to_menu == nil,
+        "confirming New Game with no controller connected should switch to a GameScene, not a ControllerSelectScene")
+
+    GameState:reset()
+    print("PASS: start_scene: confirming New Game with player_count == 2 but no controller connected falls back to 1P")
+end
+
+-- Test 15: confirming while the Players row (3) is selected toggles
+-- player_count instead of running _confirm()'s normal per-index branch --
+-- manager:switch and love.event.quit must never fire from this row.
+-- Requires a connected controller, since confirm-toggling to 2 is subject
+-- to the same no-controller gating as left/right (Test 14b).
+do
+    reset_fs()
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local scene = StartScene.new(manager)
+
+    with_joysticks({ fake_stick() }, function()
+        scene:on_enter()
+
+        tap(scene, "s")
+        assert(scene.selected == 3,
+            "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+
+        local quit_called = false
+        local original_quit = love.event.quit
+        love.event.quit = function(...) quit_called = true end
+
+        tap(scene, "return")
+
+        love.event.quit = original_quit
+
+        assert(scene.player_count == 2,
+            "confirming on Players row should toggle player_count to 2, got " .. tostring(scene.player_count))
+        assert(switched_with == nil, "confirming on Players row should never call manager:switch")
+        assert(not quit_called, "confirming on Players row should never call love.event.quit")
+    end)
+
+    print("PASS: start_scene: confirming on Players row toggles player_count instead of switching or quitting")
+end
+
+-- Test 16: toggling Players to 2 then confirming New Game carries the value
+-- onto GameState.player_count -- start_scene.lua's _confirm branch for
+-- selected == 1 runs GameState:reset() first and then assigns
+-- GameState.player_count = self.player_count, so the toggled value survives
+-- the reset. Wrapped in with_joysticks so the initial toggle to 2 is allowed
+-- (Test 14b) and doesn't snap back before New Game is confirmed (Test 14c).
+do
+    reset_fs()
+    GameState:reset()
+
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local scene = StartScene.new(manager)
+
+    with_joysticks({ fake_stick() }, function()
+        scene:on_enter()
+
+        tap(scene, "s")
+        assert(scene.selected == 3,
+            "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+
+        tap(scene, "d")
+        assert(scene.player_count == 2,
+            "sanity: toggling right should set player_count to 2, got " .. tostring(scene.player_count))
+
+        tap(scene, "up")
+        assert(scene.selected == 1,
+            "sanity: up from Players (3) with no save should skip Continue and land back on New Game (1), got " .. tostring(scene.selected))
+
+        tap(scene, "return")
+    end)
 
     assert(switched_with ~= nil, "confirming New Game should have called manager:switch")
     assert(GameState.player_count == 2,
@@ -435,6 +569,195 @@ do
         "pressing up from Players (3) with no save should skip Continue and wrap to New Game (1), got " .. tostring(scene.selected))
 
     print("PASS: start_scene: up-navigation cycles 1 -> 4 -> 3 -> 1, skipping disabled Continue")
+end
+
+-- Test 18: confirming New Game with the Players toggle left at 1 still
+-- switches manager.current to a GameScene-shaped scene (regression check
+-- against Task D's ControllerSelectScene routing change) -- specifically,
+-- the switched-to scene must NOT carry ControllerSelectScene's
+-- `escape_to_menu` marker, since GameScene never sets that field.
+do
+    reset_fs()
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local scene = StartScene.new(manager)
+    scene:on_enter()
+    assert(scene.player_count == 1, "sanity: player_count should start at 1")
+    assert(scene.selected == 1, "sanity: scene should start with selected == 1")
+
+    tap(scene, "return")
+
+    assert(switched_with ~= nil, "manager:switch should have been called when confirming New Game")
+    assert(switched_with.camera ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .camera)")
+    assert(switched_with.drawer ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .drawer)")
+    assert(switched_with.escape_to_menu == nil,
+        "New Game with player_count == 1 should switch to a GameScene, not ControllerSelectScene (unexpected escape_to_menu marker)")
+
+    GameState:reset()
+    print("PASS: start_scene: confirming New Game with player_count == 1 switches to a GameScene")
+end
+
+-- Test 19: confirming New Game with the Players toggle cycled to 2 switches
+-- manager.current to a ControllerSelectScene instead of a GameScene --
+-- verified via the `escape_to_menu == true` marker ControllerSelectScene.new
+-- sets (per docs/checklists/two-player-support.md's fixed contract), since
+-- GameScene never sets that field. Wrapped in with_joysticks so the toggle
+-- to 2 is allowed and doesn't snap back before confirming (Tests 14b/14c).
+do
+    reset_fs()
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local scene = StartScene.new(manager)
+
+    with_joysticks({ fake_stick() }, function()
+        scene:on_enter()
+
+        tap(scene, "s")
+        assert(scene.selected == 3,
+            "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+
+        tap(scene, "d")
+        assert(scene.player_count == 2,
+            "sanity: toggling right should set player_count to 2, got " .. tostring(scene.player_count))
+
+        tap(scene, "up")
+        assert(scene.selected == 1,
+            "sanity: up from Players (3) with no save should skip Continue and land back on New Game (1), got " .. tostring(scene.selected))
+
+        tap(scene, "return")
+    end)
+
+    assert(switched_with ~= nil, "manager:switch should have been called when confirming New Game")
+    assert(switched_with.escape_to_menu == true,
+        "New Game with player_count == 2 should switch to a ControllerSelectScene (missing escape_to_menu == true marker)")
+
+    GameState:reset()
+    print("PASS: start_scene: confirming New Game with player_count == 2 switches to a ControllerSelectScene")
+end
+
+-- Test 20: confirming Continue where the loaded save's game_state.player_count
+-- is 1 (the default make_save() produces, since GameState:apply_save defaults
+-- a missing player_count to 1) still switches to a GameScene with the save's
+-- scene data threaded through -- regression check mirroring Test 10's
+-- existing GameScene-shaped assertions, plus an explicit check (as Test 10
+-- does not) that the save's scene table reached the new scene via
+-- `_save_data`.
+do
+    reset_fs()
+    local save = make_save()
+    Save.write(save)
+    GameState:reset()
+
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local scene = StartScene.new(manager)
+    scene:on_enter()
+    assert(scene._has_save == true, "sanity: _has_save should be true with a save file present")
+
+    scene.selected = 2
+    tap(scene, "return")
+
+    assert(switched_with ~= nil, "manager:switch should have been called when confirming Continue")
+    assert(switched_with.camera ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .camera)")
+    assert(switched_with.drawer ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .drawer)")
+    assert(switched_with.escape_to_menu == nil,
+        "Continue restoring player_count == 1 should switch to a GameScene, not ControllerSelectScene (unexpected escape_to_menu marker)")
+    -- Save.write()/Save.read() round-trip through Lua chunk (de)serialization
+    -- (see lua/core/save.lua), so switched_with._save_data is never the same
+    -- table object as save.scene -- compare field values instead, matching
+    -- how tests/test_save.lua's round-trip assertions already do this
+    -- against make_save()'s literal x=320/y=192.
+    assert(switched_with._save_data ~= nil, "Continue should thread the save's scene data through to GameScene.new via _save_data")
+    assert(switched_with._save_data.player.x == 320,
+        "Continue's threaded scene data should preserve player.x from the save, got " .. tostring(switched_with._save_data.player.x))
+    assert(switched_with._save_data.player.y == 192,
+        "Continue's threaded scene data should preserve player.y from the save, got " .. tostring(switched_with._save_data.player.y))
+
+    GameState:reset()
+    print("PASS: start_scene: confirming Continue restoring player_count == 1 switches to a GameScene with scene data threaded through")
+end
+
+-- Test 21: confirming Continue where the loaded save's game_state.player_count
+-- is 2 switches to a ControllerSelectScene instead of a GameScene, with the
+-- save's scene data threaded through to it (per
+-- ControllerSelectScene.new(manager, save_data)'s contract, mirrored the same
+-- way Test 20 verifies scene-data threading for GameScene). Requires a
+-- connected controller at confirm time -- a restored 2P save is subject to
+-- the same confirm-time clamp (Test 14d) as a freshly toggled one, since a
+-- save's player_count says nothing about whether a controller is plugged in
+-- *now*.
+do
+    reset_fs()
+    local save = make_save()
+    save.game_state.player_count = 2
+    Save.write(save)
+    GameState:reset()
+
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local scene = StartScene.new(manager)
+    scene:on_enter()
+    assert(scene._has_save == true, "sanity: _has_save should be true with a save file present")
+
+    scene.selected = 2
+    with_joysticks({ fake_stick() }, function()
+        tap(scene, "return")
+    end)
+
+    assert(switched_with ~= nil, "manager:switch should have been called when confirming Continue")
+    assert(GameState.player_count == 2,
+        "confirming Continue with a controller connected should restore GameState.player_count from the save, got " .. tostring(GameState.player_count))
+    assert(switched_with.escape_to_menu == true,
+        "Continue restoring player_count == 2 should switch to a ControllerSelectScene (missing escape_to_menu == true marker)")
+    -- Same round-trip caveat as Test 20: compare field values, not table
+    -- identity, since Save.write()/Save.read() serialize through a Lua chunk.
+    assert(switched_with._save_data ~= nil, "Continue should thread the save's scene data through to ControllerSelectScene.new via _save_data")
+    assert(switched_with._save_data.player.x == 320,
+        "Continue's threaded scene data should preserve player.x from the save, got " .. tostring(switched_with._save_data.player.x))
+    assert(switched_with._save_data.player.y == 192,
+        "Continue's threaded scene data should preserve player.y from the save, got " .. tostring(switched_with._save_data.player.y))
+
+    GameState:reset()
+    print("PASS: start_scene: confirming Continue restoring player_count == 2 switches to a ControllerSelectScene with scene data threaded through")
+end
+
+-- Test 21b: confirming Continue where the loaded save's game_state.player_count
+-- is 2 but no controller is connected at confirm time clamps back to 1P
+-- (GameState.player_count == 1, switches to GameScene) instead of routing to
+-- a ControllerSelectScene with nothing to claim a second device.
+do
+    reset_fs()
+    local save = make_save()
+    save.game_state.player_count = 2
+    Save.write(save)
+    GameState:reset()
+
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local scene = StartScene.new(manager)
+    scene:on_enter()
+
+    scene.selected = 2
+    tap(scene, "return")
+
+    assert(switched_with ~= nil, "manager:switch should have been called when confirming Continue")
+    assert(GameState.player_count == 1,
+        "confirming Continue with no controller connected should clamp GameState.player_count to 1, got " .. tostring(GameState.player_count))
+    assert(switched_with.escape_to_menu == nil,
+        "Continue with no controller connected should switch to a GameScene, not a ControllerSelectScene")
+
+    GameState:reset()
+    print("PASS: start_scene: confirming Continue restoring player_count == 2 but no controller connected falls back to 1P")
 end
 
 print("ALL TESTS PASSED")

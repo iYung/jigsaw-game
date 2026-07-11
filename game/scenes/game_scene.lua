@@ -12,10 +12,11 @@ local GameState  = require("game/game_state")
 local GameScene = {}
 GameScene.__index = GameScene
 
-function GameScene.new(save_data)
+function GameScene.new(save_data, input_assignments)
     local self = Scene.new(1280, 720)
     setmetatable(self, GameScene)
     self._save_data = save_data
+    self._input_assignments = input_assignments
     return self
 end
 
@@ -28,7 +29,7 @@ function GameScene:on_enter()
 
     local GROUND_Y = 4 * C.SLOT  -- 256, grid-aligned so pieces rest at 3*SLOT=192
 
-    self.player = Player.new(0, GROUND_Y - C.SLOT)
+    self.player = Player.new(0, GROUND_Y - C.SLOT, self._input_assignments and self._input_assignments.p1)
     self.drawer:add(self.player, 10)
 
     self.background = {
@@ -164,6 +165,17 @@ function GameScene:on_enter()
         end
     end
 
+    if GameState.player_count == 2 then
+        self.player2 = Player.new(self.player.sprite.x + C.SLOT, self.player.sprite.y,
+            self._input_assignments and self._input_assignments.p2)
+        -- Same sprite image as Player 1 -- tint it so the two are visually
+        -- distinguishable in the world instead of looking identical. Warm
+        -- orange/gold rather than blue, since assets/player.png already has
+        -- a blue accent color that a blue tint would wash out.
+        self.player2.sprite.color = { 1, 0.7, 0.25, 1 }
+        self.drawer:add(self.player2, 10)
+    end
+
     self.pile = PuzzlePile.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
     self.drawer:add(self.pile, C.PRIORITY_PIECE)
 end
@@ -236,6 +248,7 @@ function GameScene:update(dt)
     end
 
     self.player:update(dt, self.pieces, self.boxes, self.pile, self.drawer)
+    if self.player2 then self.player2:update(dt, self.pieces, self.boxes, self.pile, self.drawer) end
 
     for _, entry in ipairs(self.active_puzzles) do
         if not entry.solved and JigsawSolver.is_assembled(entry.pieces, entry.piece_count) then
@@ -281,6 +294,11 @@ function GameScene:update(dt)
 
     self.player.sprite.x = math.max(0, math.min(self.player.sprite.x, self.world_w - C.SLOT))
     self.player.sprite.y = math.max(0, math.min(self.player.sprite.y, self.world_h - C.SLOT))
+
+    if self.player2 then
+        self.player2.sprite.x = math.max(0, math.min(self.player2.sprite.x, self.world_w - C.SLOT))
+        self.player2.sprite.y = math.max(0, math.min(self.player2.sprite.y, self.world_h - C.SLOT))
+    end
 
     self.camera:follow(self.player:centre(), 0.85)
 end

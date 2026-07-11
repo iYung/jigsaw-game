@@ -72,6 +72,8 @@ function love.keypressed(key)
         if manager.current and manager.current.to_save then
             _save_current()
             manager:switch(StartScene.new(manager))
+        elseif manager.current and manager.current.escape_to_menu then
+            manager:switch(StartScene.new(manager))
         else
             love.event.quit()
         end

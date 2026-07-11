@@ -150,4 +150,62 @@ with_joysticks({ fake_stick({ a = true }) }, function()
     print("PASS: pressed() fires only on the rising-edge frame")
 end)
 
+-- Test 8: joystick_scope = 1 (numeric) registers a press on controller 1
+-- but ignores a press on controller 2, with two controllers connected.
+with_joysticks({ fake_stick({ a = true }), fake_stick() }, function()
+    local input = Input.new({ interact = {} }, {
+        gamepad_buttons = { interact = { "a" } },
+        joystick_scope = 1,
+    })
+    input:update()
+    assert(input:is_down("interact"), "numeric scope 1 should register a press on controller 1")
+    print("PASS: numeric joystick_scope 1 registers controller 1's press")
+end)
+
+with_joysticks({ fake_stick(), fake_stick({ a = true }) }, function()
+    local input = Input.new({ interact = {} }, {
+        gamepad_buttons = { interact = { "a" } },
+        joystick_scope = 1,
+    })
+    input:update()
+    assert(not input:is_down("interact"), "numeric scope 1 should ignore a press on controller 2")
+    print("PASS: numeric joystick_scope 1 ignores controller 2's press")
+end)
+
+-- Test 9: joystick_scope = 2 (numeric) registers a press on controller 2
+-- but ignores a press on controller 1, with two controllers connected.
+with_joysticks({ fake_stick(), fake_stick({ a = true }) }, function()
+    local input = Input.new({ interact = {} }, {
+        gamepad_buttons = { interact = { "a" } },
+        joystick_scope = 2,
+    })
+    input:update()
+    assert(input:is_down("interact"), "numeric scope 2 should register a press on controller 2")
+    print("PASS: numeric joystick_scope 2 registers controller 2's press")
+end)
+
+with_joysticks({ fake_stick({ a = true }), fake_stick() }, function()
+    local input = Input.new({ interact = {} }, {
+        gamepad_buttons = { interact = { "a" } },
+        joystick_scope = 2,
+    })
+    input:update()
+    assert(not input:is_down("interact"), "numeric scope 2 should ignore a press on controller 1")
+    print("PASS: numeric joystick_scope 2 ignores controller 1's press")
+end)
+
+-- Test 10: joystick_scope = 2 with only one controller connected should be
+-- a silent no-op (empty joystick list for that scope) — no error, nothing
+-- registers, even if the sole connected controller has the mapped button
+-- held down.
+with_joysticks({ fake_stick({ a = true }) }, function()
+    local input = Input.new({ interact = {} }, {
+        gamepad_buttons = { interact = { "a" } },
+        joystick_scope = 2,
+    })
+    input:update()
+    assert(not input:is_down("interact"), "numeric scope 2 with only 1 controller connected should register nothing")
+    print("PASS: numeric joystick_scope 2 with only 1 controller connected is a silent no-op")
+end)
+
 print("ALL TESTS PASSED")

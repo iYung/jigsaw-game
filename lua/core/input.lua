@@ -16,7 +16,9 @@ end
 local function scoped_joysticks(scope)
     local sticks = love.joystick.getJoysticks()
     local result = {}
-    if scope == "any" then
+    if type(scope) == "number" then
+        if sticks[scope] then result[#result + 1] = sticks[scope] end
+    elseif scope == "any" then
         for _, stick in ipairs(sticks) do
             result[#result + 1] = stick
         end

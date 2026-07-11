@@ -7,29 +7,68 @@ local SPEED = 200
 local Player = {}
 Player.__index = Player
 
-function Player.new(x, y)
+-- Build an Input instance for a given device descriptor:
+--   nil                              -> default merged keyboard + first-two-gamepads
+--   { type = "keyboard" }            -> keyboard only, no gamepad opts
+--   { type = "gamepad", index = N }  -> gamepad-only, scoped to controller N
+function Player.build_input(device)
+    if device == nil then
+        return Input.new({
+            up           = { "w", "up" },
+            down         = { "s", "down" },
+            left         = { "a", "left" },
+            right        = { "d", "right" },
+            interact     = { "e" },
+            rotate_piece = { "r" },
+        }, {
+            gamepad_buttons = {
+                up           = { "dpup" },
+                down         = { "dpdown" },
+                left         = { "dpleft" },
+                right        = { "dpright" },
+                interact     = { "a" },
+                rotate_piece = { "x" },
+            },
+            use_left_stick = true,
+            joystick_scope = "first_two",
+        })
+    elseif device.type == "keyboard" then
+        return Input.new({
+            up           = { "w", "up" },
+            down         = { "s", "down" },
+            left         = { "a", "left" },
+            right        = { "d", "right" },
+            interact     = { "e" },
+            rotate_piece = { "r" },
+        }, nil)
+    elseif device.type == "gamepad" then
+        return Input.new({
+            up           = {},
+            down         = {},
+            left         = {},
+            right        = {},
+            interact     = {},
+            rotate_piece = {},
+        }, {
+            gamepad_buttons = {
+                up           = { "dpup" },
+                down         = { "dpdown" },
+                left         = { "dpleft" },
+                right        = { "dpright" },
+                interact     = { "a" },
+                rotate_piece = { "x" },
+            },
+            use_left_stick = true,
+            joystick_scope = device.index,
+        })
+    end
+end
+
+function Player.new(x, y, input)
     local self        = setmetatable({}, Player)
     self.sprite       = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.image = love.graphics.newImage("assets/player.png")
-    self.input        = Input.new({
-        up           = { "w", "up" },
-        down         = { "s", "down" },
-        left         = { "a", "left" },
-        right        = { "d", "right" },
-        interact     = { "e" },
-        rotate_piece = { "r" },
-    }, {
-        gamepad_buttons = {
-            up           = { "dpup" },
-            down         = { "dpdown" },
-            left         = { "dpleft" },
-            right        = { "dpright" },
-            interact     = { "a" },
-            rotate_piece = { "x" },
-        },
-        use_left_stick = true,
-        joystick_scope = "first_two",
-    })
+    self.input        = input or Player.build_input()
     self.held_piece = nil
     return self
 end

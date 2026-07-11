@@ -1,6 +1,7 @@
 local Scene     = require("lua/core/scene")
 local Input     = require("lua/core/input")
 local GameScene = require("game/scenes/game_scene")
+local ControllerSelectScene = require("game/scenes/controller_select_scene")
 local Save      = require("lua/core/save")
 local GameState = require("game/game_state")
 
@@ -22,6 +23,7 @@ function StartScene.new(manager)
     setmetatable(self, StartScene)
     self.manager  = manager
     self.player_count = 1
+    self._has_controller = #love.joystick.getJoysticks() > 0
     self.items    = { "New Game", "Continue", "Players: 1", "Exit Game" }
     self.selected = 1
     self.input    = Input.new({
@@ -69,17 +71,39 @@ end
 
 function StartScene:on_exit() end
 
+-- Clamps `player_count` to 1 if no controller is currently connected --
+-- 2P has nothing to hand Player 2 in the controller-select scene without
+-- one. Checked fresh at the exact moment New Game/Continue is confirmed,
+-- rather than continuously every frame, so a one-frame joystick-enumeration
+-- hiccup while merely navigating the menu can't silently discard a
+-- deliberate 2P selection before the player ever reaches confirm.
+local function _clamp_player_count(player_count)
+    if player_count == 2 and #love.joystick.getJoysticks() == 0 then
+        return 1
+    end
+    return player_count
+end
+
 function StartScene:_confirm()
     if self.selected == 1 then
         GameState:reset()
-        GameState.player_count = self.player_count
-        self.manager:switch(GameScene.new())
+        GameState.player_count = _clamp_player_count(self.player_count)
+        if GameState.player_count == 2 then
+            self.manager:switch(ControllerSelectScene.new(self.manager))
+        else
+            self.manager:switch(GameScene.new())
+        end
     elseif self.selected == 2 then
         if not self._has_save then return end
         local data = Save.read()
         if not data then return end
         GameState:apply_save(data.game_state)
-        self.manager:switch(GameScene.new(data.scene))
+        GameState.player_count = _clamp_player_count(GameState.player_count)
+        if GameState.player_count == 2 then
+            self.manager:switch(ControllerSelectScene.new(self.manager, data.scene))
+        else
+            self.manager:switch(GameScene.new(data.scene))
+        end
     elseif self.selected == 4 then
         love.event.quit()
     end
@@ -95,6 +119,17 @@ end
 function StartScene:update(dt)
     self.input:update()
 
+    -- 2P requires a second physical input device -- with only a keyboard
+    -- detected, there's nothing distinct to hand Player 2 in the upcoming
+    -- controller-select scene. Recomputed every frame purely as a read (for
+    -- the toggle gate below and the draw() hint) -- deliberately does NOT
+    -- write self.player_count back to 1 here; that would silently discard a
+    -- deliberate 2P selection on any single-frame joystick-enumeration
+    -- hiccup while just navigating the menu. The only places player_count
+    -- actually changes are the explicit toggle keypress below and the
+    -- confirm-time clamp in _confirm().
+    self._has_controller = #love.joystick.getJoysticks() > 0
+
     if self.input:pressed("down") then
         self.selected = _next_selectable(self.selected, 1, self._has_save, #self.items)
     end
@@ -104,7 +139,9 @@ function StartScene:update(dt)
 
     if self.selected == 3 then
         if self.input:pressed("left") or self.input:pressed("right") or self.input:pressed("confirm") then
-            self:_toggle_player_count()
+            if self._has_controller then
+                self:_toggle_player_count()
+            end
         end
         return
     end
@@ -122,6 +159,9 @@ function StartScene:draw()
         local x, y, w, h = self:_item_rect(i)
         if i == 3 and i == self.selected then
             label = "< " .. label .. " >"
+            if not self._has_controller then
+                label = label .. " (connect a controller for 2P)"
+            end
         end
         if i == 2 and not self._has_save then
             local r, g, b = NORMAL_COLOR[1], NORMAL_COLOR[2], NORMAL_COLOR[3]

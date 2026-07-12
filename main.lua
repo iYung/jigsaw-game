@@ -29,9 +29,22 @@ local Save          = require("lua/core/save")
 local GameState     = require("game/game_state")
 local SettingsState = require("game/settings_state")
 local SettingsScene = require("game/scenes/settings_scene")
+local Sound         = require("lua/core/sound")
 
 local LOGICAL_W, LOGICAL_H = 1280, 720
 local canvas
+
+local SFX_MANIFEST = {
+    sfx_dir = "assets/sounds/",
+    sfx = {
+        "pick_up",
+        "put_down",
+        "fail",
+        "menu_navigate",
+        "menu_confirm",
+        "puzzle_complete",
+    },
+}
 
 local manager
 local settings
@@ -53,6 +66,8 @@ function love.load()
 
     manager = SceneManager.new(LOGICAL_W, LOGICAL_H)
     settings = SettingsScene.new()
+
+    Sound.load(SFX_MANIFEST)
 
     if Save.settings_exists() then
         SettingsState:apply_save(Save.read_settings())

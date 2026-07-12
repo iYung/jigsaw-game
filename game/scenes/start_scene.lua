@@ -4,6 +4,7 @@ local GameScene = require("game/scenes/game_scene")
 local ControllerSelectScene = require("game/scenes/controller_select_scene")
 local Save      = require("lua/core/save")
 local GameState = require("game/game_state")
+local Sound     = require("lua/core/sound")
 
 local StartScene = {}
 StartScene.__index = StartScene
@@ -87,6 +88,7 @@ end
 
 function StartScene:_confirm()
     if self.selected == 1 then
+        Sound.play("menu_confirm")
         GameState:reset()
         GameState.player_count = _clamp_player_count(self.player_count)
         if GameState.player_count == 2 then
@@ -95,7 +97,10 @@ function StartScene:_confirm()
             self.manager:switch(GameScene.new())
         end
     elseif self.selected == 2 then
-        if not self._has_save then return end
+        if not self._has_save then
+            Sound.play("fail")
+            return
+        end
         local data = Save.read()
         if not data then return end
         GameState:apply_save(data.game_state)
@@ -106,10 +111,12 @@ function StartScene:_confirm()
             self.manager:switch(GameScene.new(data.scene))
         end
     elseif self.selected == 4 then
+        Sound.play("menu_confirm")
         if self.on_settings then
             self.on_settings()
         end
     elseif self.selected == 5 then
+        Sound.play("menu_confirm")
         love.event.quit()
     end
 end
@@ -136,16 +143,27 @@ function StartScene:update(dt)
     self._has_controller = #love.joystick.getJoysticks() > 0
 
     if self.input:pressed("down") then
+        local prev_selected = self.selected
         self.selected = _next_selectable(self.selected, 1, self._has_save, #self.items)
+        if self.selected ~= prev_selected then
+            Sound.play("menu_navigate")
+        end
     end
     if self.input:pressed("up") then
+        local prev_selected = self.selected
         self.selected = _next_selectable(self.selected, -1, self._has_save, #self.items)
+        if self.selected ~= prev_selected then
+            Sound.play("menu_navigate")
+        end
     end
 
     if self.selected == 3 then
         if self.input:pressed("left") or self.input:pressed("right") or self.input:pressed("confirm") then
             if self._has_controller then
                 self:_toggle_player_count()
+                Sound.play("menu_navigate")
+            else
+                Sound.play("fail")
             end
         end
         return

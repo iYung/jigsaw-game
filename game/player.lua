@@ -1,5 +1,6 @@
 local Sprite = require("lua/core/sprite")
 local Input  = require("lua/core/input")
+local Sound  = require("lua/core/sound")
 local C      = require("game/constants")
 
 local SPEED = 200
@@ -123,6 +124,9 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
                     drawer:add(self.held_piece, C.PRIORITY_PIECE)
                 end
                 self.held_piece = nil
+                Sound.play("put_down")
+            else
+                Sound.play("fail")
             end
         else
             local centre = self:centre()
@@ -143,6 +147,7 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
             end
             if nearest and nearest_dist <= 1.5 * C.U then
                 nearest:pick_up()
+                Sound.play("pick_up")
                 for i, piece in ipairs(pieces) do
                     if piece == nearest then
                         table.remove(pieces, i)

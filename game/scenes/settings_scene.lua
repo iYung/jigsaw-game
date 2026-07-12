@@ -129,7 +129,15 @@ function SettingsScene:_go_to_main_menu()
         Save.write({ game_state = GameState:to_save(), scene = self._scene:to_save() })
     end
     if self._manager then
-        local start_scene = StartScene.new(self._manager)
+        local manager = self._manager
+        -- Wire the fresh StartScene's "Settings" row the same way main.lua
+        -- wires every other StartScene it constructs (see main.lua's
+        -- _new_start_scene()): selecting it reopens this very SettingsScene
+        -- instance in opaque mode. Without this, the Start Scene reached via
+        -- "Main Menu" would construct with on_settings == nil, and its
+        -- Settings row would be a silent no-op (see start_scene.lua's
+        -- nil-safe on_settings handling) -- a real reported bug.
+        local start_scene = StartScene.new(manager, function() self:open(true, nil, manager) end)
         -- Sync the fresh StartScene's own nav Input to the current
         -- physical key/gamepad state before switching to it. StartScene's
         -- "confirm" binding ("e"/"return") is the very key that just
@@ -139,7 +147,7 @@ function SettingsScene:_go_to_main_menu()
         -- real :update() next frame and immediately fire its default
         -- selection ("New Game").
         start_scene.input:update()
-        self._manager:switch(start_scene)
+        manager:switch(start_scene)
     end
     self:close()
 end

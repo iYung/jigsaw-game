@@ -348,6 +348,41 @@ do
     print("PASS: settings_scene: opening Settings while the confirm key is already held does not auto-fire row 1")
 end
 
+-- Test 11: the fresh StartScene reached via "Main Menu" must have a working
+-- "Settings" row -- StartScene.new must be constructed with an on_settings
+-- callback that reopens this SettingsScene instance in opaque mode.
+-- Regression test for a real reported bug: _go_to_main_menu() previously
+-- called StartScene.new(manager) with no second argument, leaving the new
+-- Start Scene's Settings row a silent no-op (start_scene.lua's nil-safe
+-- on_settings handling).
+do
+    reset_fs()
+    SettingsState:reset()
+
+    local fake_scene = { to_save = function(self) return {} end }
+    local switched_with = nil
+    local manager = { switch = function(self, s) switched_with = s end }
+
+    local scene = SettingsScene.new()
+    scene:open(false, fake_scene, manager)
+    scene.selected = 2 -- "Main Menu" row
+    tap(scene, "return")
+
+    assert(switched_with ~= nil, "sanity: confirming Main Menu should switch to a fresh StartScene")
+    assert(type(switched_with.on_settings) == "function",
+        "the fresh StartScene reached via Main Menu must have a working on_settings callback, got " .. type(switched_with.on_settings))
+
+    -- Selecting Settings on the fresh StartScene should reopen this exact
+    -- SettingsScene instance, in opaque mode, with no live scene.
+    assert(scene.is_open == false, "sanity: settings scene should be closed after Main Menu")
+    switched_with.on_settings()
+    assert(scene.is_open == true, "selecting Settings on the fresh StartScene should reopen this SettingsScene instance")
+    assert(scene._opaque == true, "reopening via the fresh StartScene's Settings row should open in opaque mode")
+    assert(scene._scene == nil, "reopening via the fresh StartScene's Settings row should have no live scene (opaque, from the start menu)")
+
+    print("PASS: settings_scene: the StartScene reached via Main Menu has a working Settings row that reopens this SettingsScene instance")
+end
+
 print("ALL TESTS PASSED")
 
 -- Leave the process-lifetime SettingsState singleton clean for whichever

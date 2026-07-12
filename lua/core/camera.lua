@@ -30,6 +30,10 @@ function Camera:follow(target, lerp)
     local f = 1 - lerp
     self.x  = self.x + (target.x - self.x) * f
     self.y  = self.y + (target.y - self.y) * f
+    -- first real consumer of self.zoom (previously a dead field, only ever set to its 1.0 default)
+    if target.zoom ~= nil then
+        self.zoom = self.zoom + (target.zoom - self.zoom) * f
+    end
 end
 
 

@@ -50,4 +50,45 @@ do
     print("PASS: camera: screen_x/screen_y stored independently")
 end
 
+-- Test 7: follow() lerps zoom toward target.zoom when provided
+do
+    local c = Camera.new(0, 0, 1280, 720)
+    c.zoom = 1.0
+    c:follow({x = 0, y = 0, zoom = 0.5}, 0.5)
+    assert(math.abs(c.zoom - 0.75) < 1e-9,
+        "zoom should lerp halfway from 1.0 toward 0.5 (expected 0.75), got " .. tostring(c.zoom))
+    print("PASS: camera: follow() lerps zoom toward target.zoom when provided")
+end
+
+-- Test 8: follow() with lerp=0 (instant) snaps zoom to target.zoom exactly
+do
+    local c = Camera.new(0, 0, 1280, 720)
+    c.zoom = 1.0
+    c:follow({x = 0, y = 0, zoom = 0.4}, 0)
+    assert(c.zoom == 0.4, "zoom should snap exactly to target.zoom with lerp=0, got " .. tostring(c.zoom))
+    print("PASS: camera: follow() with lerp=0 snaps zoom exactly to target.zoom")
+end
+
+-- Test 9: follow() leaves zoom untouched when target.zoom is nil -- this is
+-- the existing player-follow call shape (game_scene.lua's pre-wall-view
+-- self.camera:follow(self.player:centre(), 0.85) never set a zoom field),
+-- so it must not regress once follow() knows how to lerp zoom.
+do
+    local c = Camera.new(0, 0, 1280, 720)
+    c.zoom = 0.6
+    c:follow({x = 10, y = 20}, 0.85)
+    assert(c.zoom == 0.6, "zoom should be left untouched when target.zoom is nil, got " .. tostring(c.zoom))
+    print("PASS: camera: follow() leaves zoom untouched when target.zoom is nil")
+end
+
+-- Test 10: follow() x/y lerp behavior is unchanged by the zoom addition
+do
+    local c = Camera.new(0, 0, 1280, 720)
+    c.x, c.y = 0, 0
+    c:follow({x = 100, y = 200}, 0.5)
+    assert(math.abs(c.x - 50) < 1e-9, "x should lerp halfway to 100 (expected 50), got " .. tostring(c.x))
+    assert(math.abs(c.y - 100) < 1e-9, "y should lerp halfway to 200 (expected 100), got " .. tostring(c.y))
+    print("PASS: camera: follow() x/y lerp behavior unchanged by the zoom addition")
+end
+
 print("ALL TESTS PASSED")

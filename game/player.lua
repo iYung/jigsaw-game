@@ -14,10 +14,10 @@ Player.__index = Player
 function Player.build_input(device)
     if device == nil then
         return Input.new({
-            up           = { "w", "up" },
-            down         = { "s", "down" },
-            left         = { "a", "left" },
-            right        = { "d", "right" },
+            up           = { "w" },
+            down         = { "s" },
+            left         = { "a" },
+            right        = { "d" },
             interact     = { "e" },
             rotate_piece = { "r" },
         }, {
@@ -34,10 +34,10 @@ function Player.build_input(device)
         })
     elseif device.type == "keyboard" then
         return Input.new({
-            up           = { "w", "up" },
-            down         = { "s", "down" },
-            left         = { "a", "left" },
-            right        = { "d", "right" },
+            up           = { "w" },
+            down         = { "s" },
+            left         = { "a" },
+            right        = { "d" },
             interact     = { "e" },
             rotate_piece = { "r" },
         }, nil)

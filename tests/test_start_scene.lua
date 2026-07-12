@@ -94,10 +94,10 @@ do
     print("PASS: start_scene: StartScene.new(manager) starts with selected == 1")
 end
 
--- Test 2: pressing down cycles 1 -> 3 -> 4 -> 1 with no save present (index
--- 2, "Continue", is disabled and must be skipped by the down-navigation).
--- Players (3) and Exit Game (4) are both selectable, so with 4 items the
--- full cycle now takes 3 taps instead of 2.
+-- Test 2: pressing down cycles 1 -> 3 -> 4 -> 5 -> 1 with no save present
+-- (index 2, "Continue", is disabled and must be skipped by the
+-- down-navigation). Players (3), Settings (4), and Exit Game (5) are all
+-- selectable, so with 5 items the full cycle now takes 4 taps instead of 3.
 do
     reset_fs()
     local manager = {}
@@ -111,17 +111,21 @@ do
 
     tap(scene, "s")
     assert(scene.selected == 4,
-        "pressing down from Players (3) should land on Exit Game (4), got " .. tostring(scene.selected))
+        "pressing down from Players (3) should land on Settings (4), got " .. tostring(scene.selected))
 
     tap(scene, "s")
-    assert(scene.selected == 1, "pressing down from Exit Game (4) should wrap selected to 1, got " .. tostring(scene.selected))
+    assert(scene.selected == 5,
+        "pressing down from Settings (4) should land on Exit Game (5), got " .. tostring(scene.selected))
 
-    print("PASS: start_scene: pressing down cycles 1 -> 3 -> 4 -> 1, skipping disabled Continue")
+    tap(scene, "s")
+    assert(scene.selected == 1, "pressing down from Exit Game (5) should wrap selected to 1, got " .. tostring(scene.selected))
+
+    print("PASS: start_scene: pressing down cycles 1 -> 3 -> 4 -> 5 -> 1, skipping disabled Continue")
 end
 
--- Test 3: pressing up from 1 wraps directly to 4 (Exit Game) with no save
--- present -- going backward from 1 wraps straight past Continue (2) and
--- Players (3) to the last item.
+-- Test 3: pressing up from 1 wraps directly to 5 (Exit Game) with no save
+-- present -- going backward from 1 wraps straight past Continue (2),
+-- Players (3), and Settings (4) to the last item.
 do
     reset_fs()
     local manager = {}
@@ -130,10 +134,10 @@ do
     assert(scene._has_save == false, "sanity: _has_save should be false with no save file")
 
     tap(scene, "up")
-    assert(scene.selected == 4,
-        "pressing up from 1 with no save should wrap selected to Exit Game (4), got " .. tostring(scene.selected))
+    assert(scene.selected == 5,
+        "pressing up from 1 with no save should wrap selected to Exit Game (5), got " .. tostring(scene.selected))
 
-    print("PASS: start_scene: pressing up from 1 wraps to Exit Game (4)")
+    print("PASS: start_scene: pressing up from 1 wraps to Exit Game (5)")
 end
 
 -- Test 4: confirming while selected == 1 ("New Game") calls manager:switch
@@ -158,7 +162,7 @@ do
     print("PASS: start_scene: confirming New Game (selected == 1) calls manager:switch with a GameScene-shaped arg")
 end
 
--- Test 5: confirming while selected == 4 ("Exit Game") calls love.event.quit.
+-- Test 5: confirming while selected == 5 ("Exit Game") calls love.event.quit.
 -- love.event is the real LOVE module under --headless (conf.lua only
 -- disables window/graphics/audio/sound/joystick/touch/video), and
 -- lua/headless/stubs.lua does not stub love.event at all. Rather than
@@ -172,9 +176,9 @@ do
     scene:on_enter()
 
     -- No save present, so pressing up from 1 wraps straight past Continue
-    -- (2) and Players (3) and lands directly on Exit Game (4).
+    -- (2), Players (3), and Settings (4) and lands directly on Exit Game (5).
     tap(scene, "up")
-    assert(scene.selected == 4, "sanity: scene should be on Exit Game (selected == 4) before confirming")
+    assert(scene.selected == 5, "sanity: scene should be on Exit Game (selected == 5) before confirming")
 
     local quit_called = false
     local original_quit = love.event.quit
@@ -186,7 +190,7 @@ do
 
     assert(quit_called, "love.event.quit should have been called when confirming Exit Game")
 
-    print("PASS: start_scene: confirming Exit Game (selected == 4) calls love.event.quit")
+    print("PASS: start_scene: confirming Exit Game (selected == 5) calls love.event.quit")
 end
 
 -- Test 8: with no save present, confirming while selected == 2 ("Continue")
@@ -546,9 +550,9 @@ do
     print("PASS: start_scene: confirming New Game with Players toggled to 2 sets GameState.player_count == 2")
 end
 
--- Test 17: pressing up repeatedly cycles through all 4 items, still skipping
+-- Test 17: pressing up repeatedly cycles through all 5 items, still skipping
 -- Continue (2) whenever there's no save -- reverse-direction complement to
--- Test 2's forward-direction cycle, now that the menu has grown to 4 items.
+-- Test 2's forward-direction cycle, now that the menu has grown to 5 items.
 do
     reset_fs()
     local manager = {}
@@ -557,18 +561,22 @@ do
     assert(scene._has_save == false, "sanity: _has_save should be false with no save file")
 
     tap(scene, "up")
+    assert(scene.selected == 5,
+        "pressing up from 1 with no save should wrap to Exit Game (5), got " .. tostring(scene.selected))
+
+    tap(scene, "up")
     assert(scene.selected == 4,
-        "pressing up from 1 with no save should wrap to Exit Game (4), got " .. tostring(scene.selected))
+        "pressing up from Exit Game (5) with no save should land on Settings (4), got " .. tostring(scene.selected))
 
     tap(scene, "up")
     assert(scene.selected == 3,
-        "pressing up from Exit Game (4) with no save should land on Players (3), got " .. tostring(scene.selected))
+        "pressing up from Settings (4) with no save should land on Players (3), got " .. tostring(scene.selected))
 
     tap(scene, "up")
     assert(scene.selected == 1,
         "pressing up from Players (3) with no save should skip Continue and wrap to New Game (1), got " .. tostring(scene.selected))
 
-    print("PASS: start_scene: up-navigation cycles 1 -> 4 -> 3 -> 1, skipping disabled Continue")
+    print("PASS: start_scene: up-navigation cycles 1 -> 5 -> 4 -> 3 -> 1, skipping disabled Continue")
 end
 
 -- Test 18: confirming New Game with the Players toggle left at 1 still
@@ -802,6 +810,60 @@ do
 
     GameState:reset()
     print("PASS: start_scene: confirming Continue restoring player_count == 2 but no controller connected falls back to 1P")
+end
+
+-- Test 22: the start menu's item list includes a "Settings" row at index 4
+-- (inserted immediately before "Exit Game"), and confirming while selected
+-- == 4 invokes the on_settings callback passed to
+-- StartScene.new(manager, on_settings) -- neither manager:switch nor
+-- love.event.quit should fire from this row.
+do
+    reset_fs()
+    local switched_with = nil
+    local manager = {
+        switch = function(self, scene) switched_with = scene end,
+    }
+    local on_settings_called = false
+    local scene = StartScene.new(manager, function() on_settings_called = true end)
+    scene:on_enter()
+
+    assert(scene.items[4] == "Settings",
+        "items[4] should read 'Settings', got " .. tostring(scene.items[4]))
+
+    local quit_called = false
+    local original_quit = love.event.quit
+    love.event.quit = function(...) quit_called = true end
+
+    scene.selected = 4
+    tap(scene, "return")
+
+    love.event.quit = original_quit
+
+    assert(on_settings_called, "confirming Settings (selected == 4) should invoke the on_settings callback")
+    assert(switched_with == nil, "confirming Settings should never call manager:switch")
+    assert(not quit_called, "confirming Settings should never call love.event.quit")
+
+    print("PASS: start_scene: confirming Settings (selected == 4) invokes the on_settings callback")
+end
+
+-- Test 23: StartScene.new(manager) with on_settings omitted -- the common
+-- case for every other call site in this file -- must not error when
+-- Settings is selected and confirmed; selecting it with no callback present
+-- is a silent no-op.
+do
+    reset_fs()
+    local manager = {}
+    local scene = StartScene.new(manager)
+    scene:on_enter()
+
+    assert(scene.on_settings == nil, "sanity: on_settings should be nil when omitted from StartScene.new")
+
+    scene.selected = 4
+    local ok, err = pcall(function() tap(scene, "return") end)
+
+    assert(ok, "confirming Settings with on_settings omitted should not error, got: " .. tostring(err))
+
+    print("PASS: start_scene: confirming Settings with on_settings omitted is a silent no-op and does not error")
 end
 
 print("ALL TESTS PASSED")

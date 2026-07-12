@@ -8,7 +8,14 @@ local JigsawBox  = require("game/jigsaw_box")
 local JigsawPiece = require("game/jigsaw_piece")
 local JigsawSolver = require("game/jigsaw_solver")
 local PuzzlePile = require("game/puzzle_pile")
+local WallViewTile = require("game/wall_view_tile")
 local GameState  = require("game/game_state")
+
+-- Logical/virtual resolution the whole game renders at before letterboxing
+-- (see main.lua) -- needed here to compute a zoom level that fits the
+-- completed-puzzles wall's bounding box on screen.
+local LOGICAL_W = 1280
+local LOGICAL_H = 720
 
 local GameScene = {}
 GameScene.__index = GameScene
@@ -181,6 +188,24 @@ function GameScene:on_enter()
 
     self.pile = PuzzlePile.new(WORLD_W / 2, 0, function() self:_spawn_box() end)
     self.drawer:add(self.pile, C.PRIORITY_PIECE)
+
+    -- Wall-view toggle tile, top-right corner of the floor (y = 0 is the
+    -- floor's top edge, where the shelf's baseline starts -- see
+    -- docs/design/wall-view-tile.md). Each player's view/frozen state is
+    -- independent (2P split-screen), so in 2P mode each gets their own
+    -- WallViewTile instance at the same cell, bound to their own toggle --
+    -- only wall_tile is added to the drawer, since wall_tile2 would render
+    -- an identical rectangle on top of it.
+    self.wall_tile = WallViewTile.new(WORLD_W - C.SLOT, 0, function() self:_toggle_wall_view("p1") end)
+    self.drawer:add(self.wall_tile, C.PRIORITY_PIECE)
+
+    self.view1 = "play"
+    self.wall_target1 = nil
+    if GameState.player_count == 2 then
+        self.wall_tile2 = WallViewTile.new(WORLD_W - C.SLOT, 0, function() self:_toggle_wall_view("p2") end)
+        self.view2 = "play"
+        self.wall_target2 = nil
+    end
 end
 
 function GameScene:_spawn_box()
@@ -201,6 +226,9 @@ function GameScene:_spawn_box()
             end
         end
         if not occupied and self.pile.sprite.x == cx and self.pile.sprite.y == cy then
+            occupied = true
+        end
+        if not occupied and self.wall_tile.sprite.x == cx and self.wall_tile.sprite.y == cy then
             occupied = true
         end
 
@@ -250,8 +278,12 @@ function GameScene:update(dt)
         end
     end
 
-    self.player:update(dt, self.pieces, self.boxes, self.pile, self.drawer)
-    if self.player2 then self.player2:update(dt, self.pieces, self.boxes, self.pile, self.drawer) end
+    self.player:update(dt, self.pieces, self.boxes, self.pile, self.drawer,
+        self.wall_tile, self.view1 == "wall")
+    if self.player2 then
+        self.player2:update(dt, self.pieces, self.boxes, self.pile, self.drawer,
+            self.wall_tile2, self.view2 == "wall")
+    end
 
     for _, entry in ipairs(self.active_puzzles) do
         if not entry.solved and JigsawSolver.is_assembled(entry.pieces, entry.piece_count) then
@@ -303,8 +335,61 @@ function GameScene:update(dt)
         self.player2.sprite.y = math.max(0, math.min(self.player2.sprite.y, self.world_h - C.SLOT))
     end
 
-    self.camera:follow(self.player:centre(), 0.85)
-    if self.camera2 then self.camera2:follow(self.player2:centre(), 0.85) end
+    if self.view1 == "wall" then
+        self.camera:follow(self.wall_target1, 0.85)
+    else
+        local c = self.player:centre()
+        self.camera:follow({x = c.x, y = c.y, zoom = 1.0}, 0.85)
+    end
+    if self.camera2 then
+        if self.view2 == "wall" then
+            self.camera2:follow(self.wall_target2, 0.85)
+        else
+            local c2 = self.player2:centre()
+            self.camera2:follow({x = c2.x, y = c2.y, zoom = 1.0}, 0.85)
+        end
+    end
+end
+
+-- Flips the given player's ("p1"/"p2") view between "play" and "wall".
+-- Entering "wall" computes a target camera center/zoom that fits the full
+-- bounding box of self.completed_puzzles on screen (see
+-- docs/design/wall-view-tile.md); a no-op if nothing has been shelved yet,
+-- since there's no bounding box to fit.
+function GameScene:_toggle_wall_view(which)
+    local view_key = (which == "p2") and "view2" or "view1"
+    local target_key = (which == "p2") and "wall_target2" or "wall_target1"
+
+    if self[view_key] == "wall" then
+        self[view_key] = "play"
+        return
+    end
+
+    if #self.completed_puzzles == 0 then
+        return
+    end
+
+    local min_x, min_y = math.huge, math.huge
+    local max_x, max_y = -math.huge, -math.huge
+    for _, entry in ipairs(self.completed_puzzles) do
+        local w = entry.cols * C.SLOT
+        local h = entry.rows * C.SLOT
+        min_x = math.min(min_x, entry.x)
+        min_y = math.min(min_y, entry.y)
+        max_x = math.max(max_x, entry.x + w)
+        max_y = math.max(max_y, entry.y + h)
+    end
+
+    local bbox_w = max_x - min_x
+    local bbox_h = max_y - min_y
+    local zoom = math.min(1.0, 0.9 * math.min(LOGICAL_W / bbox_w, LOGICAL_H / bbox_h))
+
+    self[target_key] = {
+        x = (min_x + max_x) / 2,
+        y = (min_y + max_y) / 2,
+        zoom = zoom,
+    }
+    self[view_key] = "wall"
 end
 
 function GameScene:draw()

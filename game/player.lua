@@ -73,8 +73,30 @@ function Player.new(x, y, input)
     return self
 end
 
-function Player:update(dt, pieces, boxes, pile, drawer)
+function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
+    -- Always run first, unconditionally: _pressed/_down in lua/core/input.lua
+    -- are edge-triggered, so skipping this while frozen would desync edge
+    -- detection for whenever the player unfreezes.
     self.input:update()
+    if frozen then
+        -- Frozen is driven by already being in wall view, so the wall tile
+        -- itself must stay interactable here -- otherwise there'd be no way
+        -- back out. Everything else (movement, piece/box/pile) stays
+        -- blocked; this mirrors the not-frozen wall_tile check below but
+        -- can't share code with it, since only one of the two branches ever
+        -- runs per frame (never both, so wall_tile:interact() can't
+        -- double-fire on the same press).
+        if self.input:pressed("interact") and self.held_piece == nil and wall_tile ~= nil then
+            local centre = self:centre()
+            local wc = wall_tile:centre()
+            local dx = wc.x - centre.x
+            local dy = wc.y - centre.y
+            if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
+                wall_tile:interact()
+            end
+        end
+        return
+    end
     local s = self.sprite
     if self.input:is_down("left")  then s.x = s.x - SPEED * dt end
     if self.input:is_down("right") then s.x = s.x + SPEED * dt end
@@ -160,6 +182,14 @@ function Player:update(dt, pieces, boxes, pile, drawer)
                 local dy = bc.y - centre.y
                 if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
                     pile:interact()
+                end
+            end
+            if self.held_piece == nil and wall_tile ~= nil then
+                local wc = wall_tile:centre()
+                local dx = wc.x - centre.x
+                local dy = wc.y - centre.y
+                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
+                    wall_tile:interact()
                 end
             end
         end

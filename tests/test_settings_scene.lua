@@ -272,6 +272,82 @@ do
     print("PASS: settings_scene: :keypressed never consumes anything (no subscreen, no close action of its own)")
 end
 
+-- Test 9: holding the confirm key ("return") through the Settings ->
+-- StartScene "Main Menu" transition must not cause the fresh StartScene to
+-- immediately fire its own default selection ("New Game"). Regression test
+-- for a real reported bug: SettingsScene:_go_to_main_menu() constructs a
+-- brand-new StartScene (lua/core/input.lua's Input starts with _down
+-- entirely false), and StartScene's own "confirm" binding is the same
+-- "e"/"return" key that just confirmed this "Main Menu" row -- without
+-- priming the new Input to the currently-held key state, the very next
+-- :update() on the fresh scene would see a false->true edge and immediately
+-- fire StartScene:_confirm() on its default row 1.
+do
+    reset_fs()
+    SettingsState:reset()
+
+    local fake_scene = { to_save = function(self) return {} end }
+    local switch_calls = 0
+    local switched_with = nil
+    local manager = { switch = function(self, s) switch_calls = switch_calls + 1; switched_with = s end }
+
+    local scene = SettingsScene.new()
+    scene:open(false, fake_scene, manager)
+    scene.selected = 2 -- "Main Menu" row
+
+    local original_isDown = love.keyboard.isDown
+    love.keyboard.isDown = function(k) return k == "return" end
+
+    scene:update(1 / 60) -- holds "return": fires confirm, triggers Main Menu -> switch
+
+    assert(switch_calls == 1, "confirming Main Menu should call manager:switch exactly once, got " .. tostring(switch_calls))
+    assert(switched_with ~= nil and switched_with.items ~= nil, "manager:switch should receive a StartScene-shaped instance")
+
+    -- Still holding "return" (never released) -- simulate the next frame's
+    -- manager:update(dt) ticking the freshly-switched StartScene.
+    switched_with:update(1 / 60)
+
+    love.keyboard.isDown = original_isDown
+
+    assert(switch_calls == 1,
+        "the fresh StartScene must not auto-fire its own confirm (New Game) just because the key that " ..
+        "confirmed Main Menu is still held -- manager:switch should still have been called exactly once, got " ..
+        tostring(switch_calls))
+    assert(switched_with.selected == 1, "sanity: the fresh StartScene's selection should remain at its default, row 1")
+
+    print("PASS: settings_scene: holding the confirm key through the Main Menu -> StartScene transition does not auto-fire the new scene's default selection")
+end
+
+-- Test 10: opening Settings while the confirm key ("e"/"return") is still
+-- physically held -- e.g. the same key that confirmed a "Settings" row on
+-- the Start Scene -- must not immediately fire this menu's own row 1.
+-- Regression test for the mirror-image of Test 9's bug: self.input:update()
+-- is skipped entirely while the scene is closed (see :update()), so
+-- self.input._down is stale from whenever Settings last closed; :open()
+-- must prime it to the current physical key state before the next real
+-- :update() call, or a still-held key would read as a fresh press.
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+
+    local original_isDown = love.keyboard.isDown
+    love.keyboard.isDown = function(k) return k == "return" end
+
+    scene:open(false, nil, nil) -- primes self.input against the held key
+
+    scene:update(1 / 60) -- still held; must not register a fresh edge
+
+    love.keyboard.isDown = original_isDown
+
+    assert(SettingsState.fullscreen == false,
+        "opening Settings while the confirm key is already held must not immediately toggle Fullscreen (row 1), got fullscreen == " ..
+        tostring(SettingsState.fullscreen))
+    assert(scene.selected == 1, "sanity: selection should remain at row 1")
+
+    print("PASS: settings_scene: opening Settings while the confirm key is already held does not auto-fire row 1")
+end
+
 print("ALL TESTS PASSED")
 
 -- Leave the process-lifetime SettingsState singleton clean for whichever

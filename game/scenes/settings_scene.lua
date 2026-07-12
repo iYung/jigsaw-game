@@ -90,6 +90,16 @@ function SettingsScene:open(opaque, scene, manager)
     self._scene = scene
     self._manager = manager
     self.selected = 1
+
+    -- self.input:update() is skipped entirely while is_open == false (see
+    -- :update() below), so self.input._down is frozen/stale from whenever
+    -- Settings last closed. Sync it to the current physical key/gamepad
+    -- state right now, before we start actively polling it again -- e.g.
+    -- the "e"/"return" key that just confirmed the Start Scene's "Settings"
+    -- row is the same key this menu's own "confirm" is bound to, and if
+    -- still physically held, the next real :update() would otherwise see a
+    -- stale-false -> true edge and immediately fire this menu's row 1.
+    self.input:update()
 end
 
 function SettingsScene:close()
@@ -119,7 +129,17 @@ function SettingsScene:_go_to_main_menu()
         Save.write({ game_state = GameState:to_save(), scene = self._scene:to_save() })
     end
     if self._manager then
-        self._manager:switch(StartScene.new(self._manager))
+        local start_scene = StartScene.new(self._manager)
+        -- Sync the fresh StartScene's own nav Input to the current
+        -- physical key/gamepad state before switching to it. StartScene's
+        -- "confirm" binding ("e"/"return") is the very key that just
+        -- confirmed this "Main Menu" row -- a brand-new Input starts with
+        -- _down entirely false (lua/core/input.lua), so without this, a
+        -- still-held key would read as a fresh press on StartScene's first
+        -- real :update() next frame and immediately fire its default
+        -- selection ("New Game").
+        start_scene.input:update()
+        self._manager:switch(start_scene)
     end
     self:close()
 end

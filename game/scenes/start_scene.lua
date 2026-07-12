@@ -18,13 +18,14 @@ local ITEMS_TOP = 340
 local NORMAL_COLOR   = { 0.35, 0.35, 0.35, 1 }
 local SELECTED_COLOR = { 0.55, 0.55, 0.55, 1 }
 
-function StartScene.new(manager)
+function StartScene.new(manager, on_settings)
     local self = Scene.new(LOGICAL_W, LOGICAL_H)
     setmetatable(self, StartScene)
     self.manager  = manager
+    self.on_settings = on_settings
     self.player_count = 1
     self._has_controller = #love.joystick.getJoysticks() > 0
-    self.items    = { "New Game", "Continue", "Players: 1", "Exit Game" }
+    self.items    = { "New Game", "Continue", "Players: 1", "Settings", "Exit Game" }
     self.selected = 1
     self.input    = Input.new({
         up      = { "w", "up" },
@@ -105,6 +106,10 @@ function StartScene:_confirm()
             self.manager:switch(GameScene.new(data.scene))
         end
     elseif self.selected == 4 then
+        if self.on_settings then
+            self.on_settings()
+        end
+    elseif self.selected == 5 then
         love.event.quit()
     end
 end

@@ -1,6 +1,7 @@
-local Sprite = require("lua/core/sprite")
-local Input  = require("lua/core/input")
-local C      = require("game/constants")
+local Sprite        = require("lua/core/sprite")
+local Input         = require("lua/core/input")
+local C             = require("game/constants")
+local SettingsState = require("game/settings_state")
 
 local SPEED = 200
 
@@ -13,13 +14,14 @@ Player.__index = Player
 --   { type = "gamepad", index = N }  -> gamepad-only, scoped to controller N
 function Player.build_input(device)
     if device == nil then
-        return Input.new({
-            up           = { "w", "up" },
-            down         = { "s", "down" },
-            left         = { "a", "left" },
-            right        = { "d", "right" },
-            interact     = { "e" },
-            rotate_piece = { "r" },
+        local key_map = SettingsState:key_map()
+        local inp = Input.new({
+            up           = key_map.up,
+            down         = key_map.down,
+            left         = key_map.left,
+            right        = key_map.right,
+            interact     = key_map.interact,
+            rotate_piece = key_map.rotate_piece,
         }, {
             gamepad_buttons = {
                 up           = { "dpup" },
@@ -32,15 +34,20 @@ function Player.build_input(device)
             use_left_stick = true,
             joystick_scope = "first_two",
         })
+        inp._keyboard_rebindable = true
+        return inp
     elseif device.type == "keyboard" then
-        return Input.new({
-            up           = { "w", "up" },
-            down         = { "s", "down" },
-            left         = { "a", "left" },
-            right        = { "d", "right" },
-            interact     = { "e" },
-            rotate_piece = { "r" },
+        local key_map = SettingsState:key_map()
+        local inp = Input.new({
+            up           = key_map.up,
+            down         = key_map.down,
+            left         = key_map.left,
+            right        = key_map.right,
+            interact     = key_map.interact,
+            rotate_piece = key_map.rotate_piece,
         }, nil)
+        inp._keyboard_rebindable = true
+        return inp
     elseif device.type == "gamepad" then
         return Input.new({
             up           = {},

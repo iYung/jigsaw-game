@@ -25,6 +25,11 @@ function GameScene.new(save_data, input_assignments)
     setmetatable(self, GameScene)
     self._save_data = save_data
     self._input_assignments = input_assignments
+    -- Read by main.lua's ESC/gamepad-Start handling (see docs/design/
+    -- settings-menu.md's "ESC / gamepad Start behavior resolution") to
+    -- decide whether ESC/Start opens the Settings overlay instead of the
+    -- old save-and-return-to-menu behavior.
+    self.esc_opens_settings = true
     return self
 end
 
@@ -439,7 +444,7 @@ function GameScene:draw()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("WASD: move   E: pick up / drop   R: rotate   ESC: save & menu", 16, 16)
+    love.graphics.print("WASD: move   E: pick up / drop   R: rotate   ESC / Start: settings", 16, 16)
     local c = self.player:centre()
     love.graphics.print(string.format("player (%.0f, %.0f)", c.x, c.y), 16, 36)
     if self.camera2 then

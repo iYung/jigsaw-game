@@ -3,8 +3,8 @@
 -- "Settings scene/overlay" section for why: switching away from a live
 -- GameScene would tear down its drawer (Scene:on_exit clears it), which a
 -- pause overlay must never do. Instead this is a plain, persistent object
--- that a later task (main.lua, Task 6) owns as a module-local and draws on
--- top of whatever SceneManager.current already drew this frame.
+-- that main.lua owns as a module-local and draws on top of whatever
+-- SceneManager.current already drew this frame.
 --
 -- Two entry points, distinguished by :open(opaque, scene, manager)'s first
 -- arg:
@@ -15,6 +15,10 @@
 --                      live GameScene). Draws a translucent scrim over the
 --                      frozen game world. Shows a "Main Menu" row instead of
 --                      "Back".
+--
+-- Only setting exposed today is the fullscreen toggle -- keybind remapping
+-- was deliberately dropped, see git history for the removed Keybinds
+-- subscreen.
 local SettingsState = require("game/settings_state")
 local Save           = require("lua/core/save")
 local Input           = require("lua/core/input")
@@ -36,48 +40,16 @@ local SELECTED_COLOR = { 0.55, 0.55, 0.55, 1 }
 
 local OPAQUE_BG_COLOR = { 0.08, 0.08, 0.08, 1 }
 
--- Top-level item list always has exactly 3 rows; index 3's label/action
+-- Top-level item list always has exactly 2 rows; index 2's label/action
 -- flips between "Back" (opaque) and "Main Menu" (overlay) -- see
 -- :_top_item_label / :_confirm_top below. This satisfies the design doc's
 -- "Back is opaque-only, Main Menu is overlay-only" requirement without
 -- needing a variable-length item list, since the two are mutually exclusive
 -- per mode.
-local TOP_ITEM_COUNT = 3
+local TOP_ITEM_COUNT = 2
 
--- The exact six remappable actions, matching game/settings_state.lua and
--- game/player.lua's Player.build_input.
-local KEYBIND_ACTIONS = { "up", "down", "left", "right", "interact", "rotate_piece" }
-local KEYBIND_LABELS  = { "Up", "Down", "Left", "Right", "Interact", "Rotate Piece" }
-
-local SHAKE_DURATION = 0.5
-
--- Keys that must never be treated as a completed capture attempt by
--- themselves (ported from /root/wip/lua/game/scenes/settings_menu.lua's
--- _MODIFIERS table) -- e.g. holding Shift to type an uppercase letter
--- shouldn't bind "lshift" as the action's key.
-local MODIFIER_KEYS = {
-    lshift = true, rshift = true, lctrl = true, rctrl = true,
-    lalt = true, ralt = true, lgui = true, rgui = true,
-    capslock = true, numlock = true, scrolllock = true,
-}
-
--- Gamepad buttons that drive this scene's own menu-nav Input instance,
--- mapped to the action names used both by the top-level item list and the
--- Keybinds subscreen's row list (self.input's _map is shared/reused between
--- them -- see the class doc comment above :open()).
+-- Gamepad buttons that drive this scene's own menu-nav Input instance.
 local GAMEPAD_NAV_ACTION = { dpup = "up", dpdown = "down", a = "confirm" }
-
--- Mirrors /root/wip/lua/game/scenes/settings_menu.lua's _all_bound: true
--- iff every one of the six remappable actions currently has a key bound.
--- SettingsState:set_keybind never assigns nil, so this should never
--- actually observe a gap in practice -- it exists purely as a defensive
--- gate on leaving the Keybinds subscreen, ported faithfully from wip.
-local function _all_bound(keybinds)
-    for _, action in ipairs(KEYBIND_ACTIONS) do
-        if keybinds[action] == nil then return false end
-    end
-    return true
-end
 
 function SettingsScene.new()
     local self = setmetatable({}, SettingsScene)
@@ -86,19 +58,12 @@ function SettingsScene.new()
     self._scene = nil
     self._manager = nil
     self.selected = 1
-    self._subscreen = nil
-    self._capturing = nil
-    self._shake_row = nil
-    self._shake_timer = 0
 
     -- Own menu-nav Input instance, identical in shape to StartScene's
     -- (start_scene.lua:29-44) minus left/right (this menu never needs
     -- horizontal nav) and minus any escape/close action -- closing Settings
     -- is handled one level up, by main.lua's global keypressed/gamepadpressed
-    -- callbacks (Task 6), exactly like StartScene has no "quit" action of
-    -- its own. Reused for both the top-level item list and the Keybinds
-    -- subscreen's row list; self._subscreen just changes which list
-    -- self.selected indexes into and what n :_nav wraps against.
+    -- callbacks, exactly like StartScene has no "quit" action of its own.
     self.input = Input.new({
         up      = { "w", "up" },
         down    = { "s", "down" },
@@ -125,45 +90,30 @@ function SettingsScene:open(opaque, scene, manager)
     self._scene = scene
     self._manager = manager
     self.selected = 1
-    self._subscreen = nil
-    self._capturing = nil
-    self._shake_row = nil
-    self._shake_timer = 0
 end
 
 function SettingsScene:close()
     self.is_open = false
 end
 
--- Number of rows the currently-active list has, for :_nav's wraparound.
-function SettingsScene:_row_count()
-    if self._subscreen == "keybinds" then
-        return #KEYBIND_ACTIONS
-    end
-    return TOP_ITEM_COUNT
-end
-
--- Advances self.selected by delta (+1 down, -1 up), wrapping modulo the
--- active list's row count.
-function SettingsScene:_nav(delta)
-    local n = self:_row_count()
-    self.selected = ((self.selected - 1 + delta) % n) + 1
-end
-
 function SettingsScene:_top_item_label(i)
     if i == 1 then
         return SettingsState.fullscreen and "Window" or "Fullscreen"
     elseif i == 2 then
-        return "Keybinds"
-    elseif i == 3 then
         return self._opaque and "Back" or "Main Menu"
     end
 end
 
+-- Advances self.selected by delta (+1 down, -1 up), wrapping modulo the
+-- top-level item count.
+function SettingsScene:_nav(delta)
+    self.selected = ((self.selected - 1 + delta) % TOP_ITEM_COUNT) + 1
+end
+
 -- Overlay-mode Main Menu action: saves using the same {game_state=, scene=}
--- shape main.lua's own save path writes (see main.lua:64-68's
--- _save_current), then switches to a fresh StartScene, then closes the
--- overlay. Guarded so an opaque-mode misfire (no live `scene`) can't crash.
+-- shape main.lua's own save path writes (see main.lua's _save_current),
+-- then switches to a fresh StartScene, then closes the overlay. Guarded so
+-- an opaque-mode misfire (no live `scene`) can't crash.
 function SettingsScene:_go_to_main_menu()
     if self._scene and self._scene.to_save then
         Save.write({ game_state = GameState:to_save(), scene = self._scene:to_save() })
@@ -174,14 +124,11 @@ function SettingsScene:_go_to_main_menu()
     self:close()
 end
 
-function SettingsScene:_confirm_top()
+function SettingsScene:_confirm()
     if self.selected == 1 then
         SettingsState:toggle_fullscreen()
         Save.write_settings(SettingsState:to_save())
     elseif self.selected == 2 then
-        self._subscreen = "keybinds"
-        self.selected = 1
-    elseif self.selected == 3 then
         if self._opaque then
             self:close()
         else
@@ -190,60 +137,10 @@ function SettingsScene:_confirm_top()
     end
 end
 
--- Reaches into the live scene's .player/.player2 (in overlay mode only --
--- opaque mode has no live Player) and rebuilds ._map on any whose Input is
--- tagged ._keyboard_rebindable == true (set by game/player.lua's
--- Player.build_input, Task 5). Players whose keyboard key lists were built
--- empty (a gamepad-assigned player2) are never tagged, so they're
--- deliberately skipped -- overwriting their ._map would otherwise hand
--- keyboard control to a controller-assigned player.
-function SettingsScene:_apply_rebind_to_live_players()
-    if self._opaque then return end
-    local scene = self._scene
-    if not scene then return end
-
-    if scene.player and scene.player.input and scene.player.input._keyboard_rebindable then
-        scene.player.input._map = SettingsState:key_map()
-    end
-    if scene.player2 and scene.player2.input and scene.player2.input._keyboard_rebindable then
-        scene.player2.input._map = SettingsState:key_map()
-    end
-end
-
--- Confirms whatever's currently selected, dispatching by subscreen: at the
--- top level this runs the item's action (:_confirm_top); inside Keybinds it
--- begins capturing a new key for the selected row's action.
-function SettingsScene:_confirm()
-    if self._subscreen == "keybinds" then
-        self._capturing = KEYBIND_ACTIONS[self.selected]
-    else
-        self:_confirm_top()
-    end
-end
-
 function SettingsScene:update(dt)
     if not self.is_open then return end
 
-    if self._shake_timer > 0 then
-        self._shake_timer = math.max(0, self._shake_timer - dt)
-        if self._shake_timer == 0 then
-            self._shake_row = nil
-        end
-    end
-
-    -- Always run, even while capturing -- Input:update()'s _down/_pressed
-    -- are edge-triggered (lua/core/input.lua:73-97), so skipping this while
-    -- capturing would desync edge detection for whenever capturing ends,
-    -- same reasoning game/player.lua:87-88 documents for its own frozen
-    -- check.
     self.input:update()
-
-    if self._capturing then
-        -- Raw key capture is driven entirely by :keypressed(key) receiving
-        -- the literal key event, not by this nav Input -- see the class doc
-        -- comment and design doc's "Menu-chrome navigation" section.
-        return
-    end
 
     if self.input:pressed("down") then
         self:_nav(1)
@@ -256,101 +153,19 @@ function SettingsScene:update(dt)
     end
 end
 
--- Handles one raw key event while capturing a rebind for self._capturing.
--- Ported from /root/wip/lua/game/scenes/settings_menu.lua:304-329's
--- keypressed logic (modifier-key skip, escape-cancels-capture, duplicate-key
--- shake-and-reject, successful bind), adapted to this file's simpler
--- plain-rectangle rendering and to SettingsState/Save instead of wip's
--- settings_state + shared input singleton.
---
--- On a duplicate-key reject, capturing deliberately STAYS active (matching
--- wip's exact behavior: the reject branch sets self._shake_row/_shake_timer
--- but never clears self._capturing) rather than cancelling -- the row shakes
--- and the player can immediately try a different key without having to
--- reselect the row.
-function SettingsScene:_handle_capture_key(key)
-    if key == "escape" then
-        self._capturing = nil
-        return true
-    end
-    if MODIFIER_KEYS[key] then
-        -- Not consumed: a bare modifier press isn't a completed capture
-        -- attempt (e.g. Shift held to type an uppercase letter) -- matches
-        -- wip's `if _MODIFIERS[key] then return false end`.
-        return false
-    end
-
-    local capturing_action = self._capturing
-    for i, action in ipairs(KEYBIND_ACTIONS) do
-        if action ~= capturing_action and SettingsState.keybinds[action] == key then
-            self._shake_row = i
-            self._shake_timer = SHAKE_DURATION
-            return true
-        end
-    end
-
-    SettingsState:set_keybind(capturing_action, key)
-    Save.write_settings(SettingsState:to_save())
-    self:_apply_rebind_to_live_players()
-    self._capturing = nil
-    return true
-end
-
--- Returns true iff the keypress was consumed (caller -- main.lua, Task 6 --
--- must not also treat it as e.g. the global ESC-closes-Settings key). Two
--- jobs: (1) raw key capture while rebinding (self._capturing ~= nil), which
--- needs the literal key rather than a named Input action; (2) gating
--- "leave the Keybinds subscreen" on every action being bound, via ESC,
--- mirroring wip's own escape handling in that state.
+-- Returns true iff the keypress was consumed. Nothing at the top level is
+-- ever consumed here -- there's no subscreen and no escape/close action of
+-- our own (see class doc comment) -- so this is always a no-op passthrough,
+-- kept so main.lua has a stable interface to call.
 function SettingsScene:keypressed(key)
-    if not self.is_open then return false end
-
-    if self._capturing then
-        return self:_handle_capture_key(key)
-    end
-
-    if self._subscreen == "keybinds" then
-        if key == "escape" then
-            if _all_bound(SettingsState.keybinds) then
-                self._subscreen = nil
-                self.selected = 2 -- back on the top-level "Keybinds" row
-                return true
-            end
-            -- Refused to leave: the press was still handled (intentionally
-            -- blocked/ignored), so main.lua must not also treat it as an
-            -- unhandled top-level escape and close the whole overlay.
-            return true
-        end
-        return false
-    end
-
-    -- Top level: nothing to capture, and no escape/close action of our
-    -- own (see class doc comment) -- never consumed here.
     return false
 end
 
--- Returns true iff the gamepad button press was consumed. Gamepad rebinding
--- isn't a thing (gamepad bindings are fixed -- see docs/design/
--- settings-menu.md's "What stays the same"), so unlike :keypressed this
--- never feeds a capture step; it only drives nav/confirm (dpup/dpdown/a) and
--- gates leaving the Keybinds subscreen via "start", mirroring :keypressed's
--- escape handling.
+-- Returns true iff the gamepad button press was consumed. Drives nav/confirm
+-- (dpup/dpdown/a) directly, same reasoning as :update's polling but pre-empts
+-- a same-frame double-fire -- see the _down pre-set below.
 function SettingsScene:gamepadpressed(button)
     if not self.is_open then return false end
-
-    if self._capturing then
-        -- Capture only reacts to raw keyboard keys via :keypressed.
-        return false
-    end
-
-    if self._subscreen == "keybinds" and button == "start" then
-        if _all_bound(SettingsState.keybinds) then
-            self._subscreen = nil
-            self.selected = 2
-            return true
-        end
-        return false
-    end
 
     local action = GAMEPAD_NAV_ACTION[button]
     if not action then return false end
@@ -379,64 +194,6 @@ function SettingsScene:_item_rect(i)
     return x, y, ITEM_W, ITEM_H
 end
 
-function SettingsScene:_draw_top()
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.printf("Settings", 0, 140, LOGICAL_W, "center")
-
-    for i = 1, TOP_ITEM_COUNT do
-        local label = self:_top_item_label(i)
-        local x, y, w, h = self:_item_rect(i)
-
-        if i == self.selected then
-            love.graphics.setColor(SELECTED_COLOR)
-        else
-            love.graphics.setColor(NORMAL_COLOR)
-        end
-        love.graphics.rectangle("fill", x, y, w, h)
-
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.printf(label, x, y + h / 2 - 8, w, "center")
-    end
-end
-
-function SettingsScene:_draw_keybinds()
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.printf("Keybinds", 0, 140, LOGICAL_W, "center")
-
-    for i, action in ipairs(KEYBIND_ACTIONS) do
-        local x, y, w, h = self:_item_rect(i)
-        local ox = 0
-        local tint_r, tint_g, tint_b = 1, 1, 1
-
-        if self._shake_row == i and self._shake_timer > 0 then
-            -- Ported from wip's shake visual (settings_menu.lua's draw()):
-            -- decaying sine-wave horizontal offset plus a reddish tint,
-            -- decaying to 0/white as self._shake_timer runs out.
-            ox = math.sin(self._shake_timer * 40) * 8 * (self._shake_timer / SHAKE_DURATION)
-            tint_r, tint_g, tint_b = 1, 0.35, 0.35
-        end
-
-        if i == self.selected then
-            love.graphics.setColor(SELECTED_COLOR[1], SELECTED_COLOR[2], SELECTED_COLOR[3], 1)
-        else
-            love.graphics.setColor(NORMAL_COLOR[1], NORMAL_COLOR[2], NORMAL_COLOR[3], 1)
-        end
-        love.graphics.rectangle("fill", x + ox, y, w, h)
-
-        local value
-        if self._capturing == action then
-            value = "press a key"
-        else
-            value = tostring(SettingsState.keybinds[action] or "?"):upper()
-        end
-
-        love.graphics.setColor(tint_r, tint_g, tint_b, 1)
-        love.graphics.printf(KEYBIND_LABELS[i] .. ":  " .. value, x + ox, y + h / 2 - 8, w, "center")
-    end
-
-    love.graphics.setColor(1, 1, 1, 1)
-end
-
 function SettingsScene:draw()
     if not self.is_open then return end
 
@@ -456,10 +213,22 @@ function SettingsScene:draw()
         love.graphics.rectangle("fill", 0, 0, LOGICAL_W, LOGICAL_H)
     end
 
-    if self._subscreen == "keybinds" then
-        self:_draw_keybinds()
-    else
-        self:_draw_top()
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf("Settings", 0, 140, LOGICAL_W, "center")
+
+    for i = 1, TOP_ITEM_COUNT do
+        local label = self:_top_item_label(i)
+        local x, y, w, h = self:_item_rect(i)
+
+        if i == self.selected then
+            love.graphics.setColor(SELECTED_COLOR)
+        else
+            love.graphics.setColor(NORMAL_COLOR)
+        end
+        love.graphics.rectangle("fill", x, y, w, h)
+
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.printf(label, x, y + h / 2 - 8, w, "center")
     end
 
     love.graphics.setColor(1, 1, 1, 1)

@@ -1,36 +1,13 @@
--- Session-lifetime settings singleton: fullscreen flag + remappable keyboard
--- keybinds. to_save()/apply_save() exist for the settings.dat persistence
--- feature, mirroring game/game_state.lua's GameState pattern -- a
--- process-lifetime singleton, require'd directly wherever needed, not
--- constructor-injected.
+-- Session-lifetime settings singleton: currently just the fullscreen flag.
+-- to_save()/apply_save() exist for the settings.dat persistence feature,
+-- mirroring game/game_state.lua's GameState pattern -- a process-lifetime
+-- singleton, require'd directly wherever needed, not constructor-injected.
 local SettingsState = {}
 SettingsState.__index = SettingsState
-
--- The exact six gameplay actions that are keyboard-remappable, matching
--- game/player.lua's Player.build_input. Menu-chrome navigation
--- (up/down/left/right/confirm used by StartScene/SettingsScene) is
--- intentionally not part of this set -- see docs/design/settings-menu.md.
-SettingsState.DEFAULT_KEYBINDS = {
-    up = "w",
-    down = "s",
-    left = "a",
-    right = "d",
-    interact = "e",
-    rotate_piece = "r",
-}
-
-local function copy_keybinds(keybinds)
-    local result = {}
-    for action, key in pairs(keybinds) do
-        result[action] = key
-    end
-    return result
-end
 
 function SettingsState.new()
     local self = setmetatable({}, SettingsState)
     self.fullscreen = false
-    self.keybinds = copy_keybinds(SettingsState.DEFAULT_KEYBINDS)
     return self
 end
 
@@ -40,30 +17,10 @@ function SettingsState:toggle_fullscreen()
     love.window.setFullscreen(self.fullscreen)
 end
 
--- Rebinds a single action to a single key. No duplicate-key rejection here
--- -- that policy lives in game/scenes/settings_scene.lua, which is the only
--- caller with enough context (the other actions' current bindings) to
--- decide what counts as a rejected rebind.
-function SettingsState:set_keybind(action, key)
-    self.keybinds[action] = key
-end
-
--- Returns keybinds in the {action = {key}} shape lua/core/input.lua's
--- Input.new expects for its keyboard key-list argument -- each action maps
--- to a single-element list.
-function SettingsState:key_map()
-    local result = {}
-    for action, key in pairs(self.keybinds) do
-        result[action] = {key}
-    end
-    return result
-end
-
--- Resets to default keybinds and fullscreen off, for test isolation, same
--- purpose as GameState:reset(). Nothing in game-runtime code calls this.
+-- Resets to fullscreen off, for test isolation, same purpose as
+-- GameState:reset(). Nothing in game-runtime code calls this.
 function SettingsState:reset()
     self.fullscreen = false
-    self.keybinds = copy_keybinds(SettingsState.DEFAULT_KEYBINDS)
 end
 
 -- Returns a plain snapshot table of this singleton's persistable fields,
@@ -72,7 +29,6 @@ function SettingsState:to_save()
     return {
         version = 1,
         fullscreen = self.fullscreen,
-        keybinds = self.keybinds,
     }
 end
 
@@ -87,7 +43,6 @@ function SettingsState:apply_save(data)
         return
     end
     self.fullscreen = data.fullscreen
-    self.keybinds = data.keybinds
 end
 
 -- Module returns a singleton instance (not the class table) so every

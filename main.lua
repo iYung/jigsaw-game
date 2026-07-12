@@ -44,6 +44,13 @@ local SFX_MANIFEST = {
         "menu_confirm",
         "puzzle_complete",
     },
+    music = {
+        menu = { path = "assets/music/menu.mp3", autoplay = true, looping = true },
+        bg1 = { path = "assets/music/background.mp3", autoplay = false, looping = false },
+        bg2 = { path = "assets/music/background2.mp3", autoplay = false, looping = false },
+        bg3 = { path = "assets/music/background3.mp3", autoplay = false, looping = false },
+        bg4 = { path = "assets/music/background4.mp3", autoplay = false, looping = false },
+    },
 }
 
 local manager
@@ -78,6 +85,7 @@ function love.load()
 end
 
 function love.update(dt)
+    Sound.update(dt)
     if settings.is_open then
         -- Pause gameplay input polling entirely while Settings is open.
         settings:update(dt)
@@ -142,4 +150,8 @@ end
 
 function love.quit()
     _save_current()
+end
+
+function love.focus(focused)
+    Sound.on_focus(focused)
 end

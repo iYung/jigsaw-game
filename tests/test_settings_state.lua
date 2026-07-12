@@ -27,6 +27,13 @@ do
     print("PASS: settings_state: defaults to sfx_volume == 100")
 end
 
+do
+    SettingsState:reset()
+    assert(SettingsState.music_volume == 100,
+        "music_volume should default to 100, got " .. tostring(SettingsState.music_volume))
+    print("PASS: settings_state: defaults to music_volume == 100")
+end
+
 -- toggle_fullscreen() flips .fullscreen, and flips back on a second call --
 
 do
@@ -62,33 +69,80 @@ do
     print("PASS: settings_state: set_sfx_volume() clamps below 0 and above 100, and sets in-range values as-is")
 end
 
+-- set_music_volume(v) clamps to [0, 100] and sets in-range values as-is ----
+
+do
+    SettingsState:reset()
+
+    SettingsState:set_music_volume(-10)
+    assert(SettingsState.music_volume == 0,
+        "set_music_volume(-10) should clamp to 0, got " .. tostring(SettingsState.music_volume))
+
+    SettingsState:set_music_volume(150)
+    assert(SettingsState.music_volume == 100,
+        "set_music_volume(150) should clamp to 100, got " .. tostring(SettingsState.music_volume))
+
+    SettingsState:set_music_volume(30)
+    assert(SettingsState.music_volume == 30,
+        "set_music_volume(30) should set music_volume to 30 as-is, got " .. tostring(SettingsState.music_volume))
+    print("PASS: settings_state: set_music_volume() clamps below 0 and above 100, and sets in-range values as-is")
+end
+
 -- to_save()/apply_save() round-trip correctly ------------------------------
 
 do
     SettingsState:reset()
     SettingsState:toggle_fullscreen()
     SettingsState:set_sfx_volume(30)
+    SettingsState:set_music_volume(60)
     assert(SettingsState.fullscreen == true, "sanity: fullscreen should be true before to_save()")
     assert(SettingsState.sfx_volume == 30, "sanity: sfx_volume should be 30 before to_save()")
+    assert(SettingsState.music_volume == 60, "sanity: music_volume should be 60 before to_save()")
 
     local saved = SettingsState:to_save()
-    assert(saved.version == 2, "to_save() should report version == 2, got " .. tostring(saved.version))
+    assert(saved.version == 3, "to_save() should report version == 3, got " .. tostring(saved.version))
     assert(saved.fullscreen == true,
         "to_save().fullscreen should mirror the live singleton, got " .. tostring(saved.fullscreen))
     assert(saved.sfx_volume == 30,
         "to_save().sfx_volume should mirror the live singleton, got " .. tostring(saved.sfx_volume))
+    assert(saved.music_volume == 60,
+        "to_save().music_volume should mirror the live singleton, got " .. tostring(saved.music_volume))
 
     -- Reset to defaults, then restore the previously-saved snapshot.
     SettingsState:reset()
     assert(SettingsState.fullscreen == false, "sanity: reset() should clear fullscreen before apply_save")
     assert(SettingsState.sfx_volume == 100, "sanity: reset() should clear sfx_volume before apply_save")
+    assert(SettingsState.music_volume == 100, "sanity: reset() should clear music_volume before apply_save")
 
     SettingsState:apply_save(saved)
     assert(SettingsState.fullscreen == true,
         "apply_save() should restore fullscreen == true, got " .. tostring(SettingsState.fullscreen))
     assert(SettingsState.sfx_volume == 30,
         "apply_save() should restore sfx_volume == 30, got " .. tostring(SettingsState.sfx_volume))
-    print("PASS: settings_state: to_save()/apply_save() round-trip fullscreen and sfx_volume correctly for a version == 2 payload")
+    assert(SettingsState.music_volume == 60,
+        "apply_save() should restore music_volume == 60, got " .. tostring(SettingsState.music_volume))
+    print("PASS: settings_state: to_save()/apply_save() round-trip fullscreen, sfx_volume, and music_volume correctly for a version == 3 payload")
+end
+
+-- apply_save() applies a version == 2 payload (no music_volume key) --------
+
+do
+    SettingsState:reset()
+    SettingsState:set_sfx_volume(30)
+    SettingsState:set_music_volume(30)
+    assert(SettingsState.fullscreen == false, "sanity: fullscreen should start false before version == 2 apply_save")
+    assert(SettingsState.sfx_volume == 30, "sanity: sfx_volume should be 30 before version == 2 apply_save")
+    assert(SettingsState.music_volume == 30, "sanity: music_volume should be 30 before version == 2 apply_save")
+
+    SettingsState:apply_save({ version = 2, fullscreen = true, sfx_volume = 40 })
+    assert(SettingsState.fullscreen == true,
+        "apply_save() with a version == 2 payload should apply fullscreen == true, got " .. tostring(SettingsState.fullscreen))
+    assert(SettingsState.sfx_volume == 40,
+        "apply_save() with a version == 2 payload should apply sfx_volume == 40, got " .. tostring(SettingsState.sfx_volume))
+    assert(SettingsState.music_volume == 100,
+        "apply_save() with a version == 2 payload (no music_volume key) should default music_volume to 100, got " ..
+        tostring(SettingsState.music_volume))
+    print("PASS: settings_state: apply_save() with a version == 2 payload applies fullscreen/sfx_volume and defaults music_volume to 100")
 end
 
 -- apply_save() applies a legacy version == 1 payload (no sfx_volume key) --
@@ -96,8 +150,10 @@ end
 do
     SettingsState:reset()
     SettingsState:set_sfx_volume(30)
+    SettingsState:set_music_volume(30)
     assert(SettingsState.fullscreen == false, "sanity: fullscreen should start false before legacy apply_save")
     assert(SettingsState.sfx_volume == 30, "sanity: sfx_volume should be 30 before legacy apply_save")
+    assert(SettingsState.music_volume == 30, "sanity: music_volume should be 30 before legacy apply_save")
 
     SettingsState:apply_save({ version = 1, fullscreen = true })
     assert(SettingsState.fullscreen == true,
@@ -105,7 +161,10 @@ do
     assert(SettingsState.sfx_volume == 100,
         "apply_save() with a version == 1 payload (no sfx_volume key) should default sfx_volume to 100, got " ..
         tostring(SettingsState.sfx_volume))
-    print("PASS: settings_state: apply_save() with a legacy version == 1 payload applies fullscreen and defaults sfx_volume to 100")
+    assert(SettingsState.music_volume == 100,
+        "apply_save() with a version == 1 payload (no music_volume key) should default music_volume to 100, got " ..
+        tostring(SettingsState.music_volume))
+    print("PASS: settings_state: apply_save() with a legacy version == 1 payload applies fullscreen and defaults sfx_volume/music_volume to 100")
 end
 
 -- apply_save() version-gate / reset-on-mismatch behavior -------------------
@@ -136,16 +195,21 @@ do
     SettingsState:reset()
     SettingsState:toggle_fullscreen()
     SettingsState:set_sfx_volume(30)
+    SettingsState:set_music_volume(30)
     assert(SettingsState.fullscreen == true, "test setup should have driven fullscreen to true before apply_save(version mismatch)")
     assert(SettingsState.sfx_volume == 30, "test setup should have driven sfx_volume to 30 before apply_save(version mismatch)")
+    assert(SettingsState.music_volume == 30, "test setup should have driven music_volume to 30 before apply_save(version mismatch)")
 
-    SettingsState:apply_save({ version = 999, fullscreen = true, sfx_volume = 30 })
+    SettingsState:apply_save({ version = 999, fullscreen = true, sfx_volume = 30, music_volume = 30 })
     assert(SettingsState.fullscreen == false,
         "apply_save() with a mismatched version should reset fullscreen to false rather than apply the mismatched data, got " ..
         tostring(SettingsState.fullscreen))
     assert(SettingsState.sfx_volume == 100,
         "apply_save() with a mismatched version should reset sfx_volume to 100 rather than apply the mismatched data, got " ..
         tostring(SettingsState.sfx_volume))
+    assert(SettingsState.music_volume == 100,
+        "apply_save() with a mismatched version should reset music_volume to 100 rather than apply the mismatched data, got " ..
+        tostring(SettingsState.music_volume))
     print("PASS: settings_state: apply_save() with a mismatched version falls back to a freshly-reset state instead of applying garbage data")
 end
 
@@ -155,15 +219,19 @@ do
     SettingsState:reset()
     SettingsState:toggle_fullscreen()
     SettingsState:set_sfx_volume(30)
+    SettingsState:set_music_volume(30)
     assert(SettingsState.fullscreen == true, "test setup should have mutated fullscreen before reset()")
     assert(SettingsState.sfx_volume == 30, "test setup should have mutated sfx_volume before reset()")
+    assert(SettingsState.music_volume == 30, "test setup should have mutated music_volume before reset()")
 
     SettingsState:reset()
     assert(SettingsState.fullscreen == false,
         "reset() should restore fullscreen to false, got " .. tostring(SettingsState.fullscreen))
     assert(SettingsState.sfx_volume == 100,
         "reset() should restore sfx_volume to 100, got " .. tostring(SettingsState.sfx_volume))
-    print("PASS: settings_state: reset() restores fullscreen and sfx_volume defaults after prior mutation")
+    assert(SettingsState.music_volume == 100,
+        "reset() should restore music_volume to 100, got " .. tostring(SettingsState.music_volume))
+    print("PASS: settings_state: reset() restores fullscreen, sfx_volume, and music_volume defaults after prior mutation")
 end
 
 print("ALL TESTS PASSED")

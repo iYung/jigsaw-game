@@ -2,3 +2,8 @@ menu_navigate is https://freesound.org/people/qubodup/sounds/844185/ by qubodup
 menu_confirm is https://freesound.org/people/qubodup/sounds/844184/ by qubodup
 put_down is https://freesound.org/people/qubodup/sounds/792930/ by qubodup
 fail is https://freesound.org/people/qubodup/sounds/844191/ by qubodup
+Menu music is kickback kroose trash kid
+background is sarcastic shop trash kid
+background2 is hillacious hiltops by thrash kid
+background3 is sassy shells by thrash kid
+background4 is nocturnal knoll by thrash kid

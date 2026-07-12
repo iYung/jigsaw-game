@@ -12,6 +12,7 @@ function SettingsState.new()
     local self = setmetatable({}, SettingsState)
     self.fullscreen = false
     self.sfx_volume = 100
+    self.music_volume = 100
     return self
 end
 
@@ -30,20 +31,31 @@ function SettingsState:set_sfx_volume(v)
     Sound.set_sfx_volume(v / 100)
 end
 
--- Resets to fullscreen off and full SFX volume, for test isolation, same
--- purpose as GameState:reset(). Nothing in game-runtime code calls this.
+-- Clamps v to [0, 100], stores it, and pushes the normalized 0..1 volume
+-- into the live Sound subsystem -- sibling of set_sfx_volume, but for the
+-- independent music volume control.
+function SettingsState:set_music_volume(v)
+    v = math.max(0, math.min(100, v))
+    self.music_volume = v
+    Sound.set_music_volume(v / 100)
+end
+
+-- Resets to fullscreen off and full SFX/music volume, for test isolation,
+-- same purpose as GameState:reset(). Nothing in game-runtime code calls this.
 function SettingsState:reset()
     self.fullscreen = false
     self.sfx_volume = 100
+    self.music_volume = 100
 end
 
 -- Returns a plain snapshot table of this singleton's persistable fields,
 -- suitable for handing to lua/core/save.lua's serializer.
 function SettingsState:to_save()
     return {
-        version = 2,
+        version = 3,
         fullscreen = self.fullscreen,
         sfx_volume = self.sfx_volume,
+        music_volume = self.music_volume,
     }
 end
 
@@ -58,16 +70,28 @@ function SettingsState:apply_save(data)
         return
     end
     if data.version == 1 then
-        -- Legacy save, predates sfx_volume: apply fullscreen as today and
-        -- default sfx_volume to full, keeping the live Sound subsystem in
-        -- sync with the default.
+        -- Legacy save, predates sfx_volume/music_volume: apply fullscreen as
+        -- today and default both volumes to full, keeping the live Sound
+        -- subsystem in sync with the defaults.
         self.fullscreen = data.fullscreen
         self.sfx_volume = 100
         Sound.set_sfx_volume(1.0)
+        self.music_volume = 100
+        Sound.set_music_volume(1.0)
     elseif data.version == 2 then
+        -- Predates music_volume: apply fullscreen/sfx_volume as today and
+        -- default music_volume to full.
         self.fullscreen = data.fullscreen
         self.sfx_volume = data.sfx_volume
         Sound.set_sfx_volume(data.sfx_volume / 100)
+        self.music_volume = 100
+        Sound.set_music_volume(1.0)
+    elseif data.version == 3 then
+        self.fullscreen = data.fullscreen
+        self.sfx_volume = data.sfx_volume
+        Sound.set_sfx_volume(data.sfx_volume / 100)
+        self.music_volume = data.music_volume
+        Sound.set_music_volume(data.music_volume / 100)
     else
         self:reset()
     end

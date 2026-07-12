@@ -1,16 +1,17 @@
 -- test_settings_scene.lua
 -- Unit tests for game/scenes/settings_scene.lua: row navigation (wrap
--- semantics across the 3 top-level rows), opaque-vs-overlay top-level item
+-- semantics across the 4 top-level rows), opaque-vs-overlay top-level item
 -- set + confirm behavior, the Fullscreen toggle + persistence, the SFX
--- Volume row's left/right adjustment + persistence, and
--- :gamepadpressed(button) nav/confirm/volume.
+-- Volume row's left/right adjustment + persistence, the Music Volume row's
+-- left/right adjustment + persistence, and :gamepadpressed(button)
+-- nav/confirm/volume.
 -- Matches tests/test_start_scene.lua's tap()/with_joysticks() helper style
 -- (duplicated locally per this repo's no-shared-test-helpers convention)
 -- and tests/test_save.lua's in-memory love.filesystem stub pattern.
 --
 -- Keybind remapping was deliberately dropped from this scene (no Keybinds
--- subscreen); the Fullscreen toggle, SFX Volume, and Back/Main Menu rows
--- exist (row 1, row 2, row 3 respectively).
+-- subscreen); the Fullscreen toggle, SFX Volume, Music Volume, and
+-- Back/Main Menu rows exist (row 1, row 2, row 3, row 4 respectively).
 
 local SettingsScene = require("game/scenes/settings_scene")
 local SettingsState = require("game/settings_state")
@@ -77,9 +78,9 @@ local function tap(scene, key)
     scene:update(1 / 60)
 end
 
--- Test 1: top-level row navigation (3 rows: Fullscreen / SFX Volume /
--- Back-or-Main-Menu) wraps in both directions, per SettingsScene:_nav's
--- modulo wraparound.
+-- Test 1: top-level row navigation (4 rows: Fullscreen / SFX Volume / Music
+-- Volume / Back-or-Main-Menu) wraps in both directions, per
+-- SettingsScene:_nav's modulo wraparound.
 do
     reset_fs()
     SettingsState:reset()
@@ -91,19 +92,22 @@ do
     assert(scene.selected == 2, "pressing down from row 1 should land on row 2 (SFX Volume), got " .. tostring(scene.selected))
 
     tap(scene, "s")
-    assert(scene.selected == 3, "pressing down from row 2 should land on row 3 (Back/Main Menu), got " .. tostring(scene.selected))
+    assert(scene.selected == 3, "pressing down from row 2 should land on row 3 (Music Volume), got " .. tostring(scene.selected))
 
     tap(scene, "s")
-    assert(scene.selected == 1, "pressing down from row 3 (the last top-level row) should wrap to row 1, got " .. tostring(scene.selected))
+    assert(scene.selected == 4, "pressing down from row 3 should land on row 4 (Back/Main Menu), got " .. tostring(scene.selected))
+
+    tap(scene, "s")
+    assert(scene.selected == 1, "pressing down from row 4 (the last top-level row) should wrap to row 1, got " .. tostring(scene.selected))
 
     tap(scene, "w")
-    assert(scene.selected == 3, "pressing up from row 1 should wrap to row 3 (the last top-level row), got " .. tostring(scene.selected))
+    assert(scene.selected == 4, "pressing up from row 1 should wrap to row 4 (the last top-level row), got " .. tostring(scene.selected))
 
-    print("PASS: settings_scene: top-level row navigation wraps in both directions across the 3 rows")
+    print("PASS: settings_scene: top-level row navigation wraps in both directions across the 4 rows")
 end
 
--- Test 2: opaque mode shows "Back" as row 3; overlay mode shows "Main Menu"
--- instead -- SettingsScene:_top_item_label(3).
+-- Test 2: opaque mode shows "Back" as row 4; overlay mode shows "Main Menu"
+-- instead -- SettingsScene:_top_item_label(4).
 do
     reset_fs()
     SettingsState:reset()
@@ -111,34 +115,34 @@ do
 
     scene:open(true, nil, nil)
     assert(scene._opaque == true, "opening with opaque == true should set self._opaque == true")
-    assert(scene:_top_item_label(3) == "Back",
-        "opaque mode should show 'Back' as row 3, got " .. tostring(scene:_top_item_label(3)))
+    assert(scene:_top_item_label(4) == "Back",
+        "opaque mode should show 'Back' as row 4, got " .. tostring(scene:_top_item_label(4)))
 
     scene:open(false, nil, nil)
     assert(scene._opaque == false, "opening with opaque == false should set self._opaque == false")
-    assert(scene:_top_item_label(3) == "Main Menu",
-        "overlay mode should show 'Main Menu' as row 3, got " .. tostring(scene:_top_item_label(3)))
+    assert(scene:_top_item_label(4) == "Main Menu",
+        "overlay mode should show 'Main Menu' as row 4, got " .. tostring(scene:_top_item_label(4)))
 
-    print("PASS: settings_scene: opaque mode shows 'Back' as row 3; overlay mode shows 'Main Menu' instead")
+    print("PASS: settings_scene: opaque mode shows 'Back' as row 4; overlay mode shows 'Main Menu' instead")
 end
 
--- Test 3: opaque mode's "Back" row (row 3) closes the overlay via :close(),
+-- Test 3: opaque mode's "Back" row (row 4) closes the overlay via :close(),
 -- and requires no live scene/manager to do so.
 do
     reset_fs()
     SettingsState:reset()
     local scene = SettingsScene.new()
     scene:open(true, nil, nil)
-    scene.selected = 3
+    scene.selected = 4
     assert(scene.is_open == true, "sanity: scene should be open before confirming Back")
 
     tap(scene, "return")
 
     assert(scene.is_open == false, "confirming 'Back' in opaque mode should close the settings scene")
-    print("PASS: settings_scene: confirming opaque-mode 'Back' (row 3) calls :close()")
+    print("PASS: settings_scene: confirming opaque-mode 'Back' (row 4) calls :close()")
 end
 
--- Test 4: overlay mode's "Main Menu" row (row 3) writes a save (via
+-- Test 4: overlay mode's "Main Menu" row (row 4) writes a save (via
 -- Save.write, the same {game_state=, scene=} shape main.lua's own save path
 -- writes) using the live `scene`'s :to_save(), switches away via the
 -- `manager` passed to :open() (manager:switch called with a StartScene
@@ -153,8 +157,8 @@ do
 
     local scene = SettingsScene.new()
     scene:open(false, fake_scene, manager)
-    scene.selected = 3
-    assert(scene:_top_item_label(3) == "Main Menu", "sanity: row 3 should read 'Main Menu' in overlay mode")
+    scene.selected = 4
+    assert(scene:_top_item_label(4) == "Main Menu", "sanity: row 4 should read 'Main Menu' in overlay mode")
 
     tap(scene, "return")
 
@@ -169,7 +173,7 @@ do
     assert(saved.scene ~= nil and saved.scene.marker == "from-fake-scene",
         "the Main Menu save should thread the live scene's :to_save() through as the scene= field")
 
-    print("PASS: settings_scene: overlay-mode 'Main Menu' (row 3) saves, switches to StartScene via manager, and closes")
+    print("PASS: settings_scene: overlay-mode 'Main Menu' (row 4) saves, switches to StartScene via manager, and closes")
 end
 
 -- Test 5: the Fullscreen row (row 1) toggles SettingsState.fullscreen (flips
@@ -300,7 +304,7 @@ do
 
     local scene = SettingsScene.new()
     scene:open(false, fake_scene, manager)
-    scene.selected = 3 -- "Main Menu" row
+    scene.selected = 4 -- "Main Menu" row
 
     local original_isDown = love.keyboard.isDown
     love.keyboard.isDown = function(k) return k == "return" end
@@ -372,7 +376,7 @@ do
 
     local scene = SettingsScene.new()
     scene:open(false, fake_scene, manager)
-    scene.selected = 3 -- "Main Menu" row
+    scene.selected = 4 -- "Main Menu" row
     tap(scene, "return")
 
     assert(switched_with ~= nil, "sanity: confirming Main Menu should switch to a fresh StartScene")
@@ -467,9 +471,12 @@ do
     print("PASS: settings_scene: pressing left on the SFX Volume row decreases sfx_volume by 10 (floored at 0) and persists")
 end
 
--- Test 15: left/right presses while row 1 (Fullscreen) or row 3
+-- Test 15: left/right presses while row 1 (Fullscreen) or row 4
 -- (Back/Main Menu) is selected are no-ops -- sfx_volume only responds to
 -- left/right while row 2 is selected, per SettingsScene:update's guard.
+-- (Row 3, Music Volume, does respond to left/right, but adjusts
+-- music_volume rather than sfx_volume -- see the dedicated Music Volume
+-- tests below.)
 do
     reset_fs()
     SettingsState:reset()
@@ -484,17 +491,17 @@ do
     assert(SettingsState.sfx_volume == 100,
         "pressing left while row 1 is selected should not change sfx_volume, got " .. tostring(SettingsState.sfx_volume))
 
-    scene.selected = 3
+    scene.selected = 4
     tap(scene, "right")
     assert(SettingsState.sfx_volume == 100,
-        "pressing right while row 3 is selected should not change sfx_volume, got " .. tostring(SettingsState.sfx_volume))
+        "pressing right while row 4 is selected should not change sfx_volume, got " .. tostring(SettingsState.sfx_volume))
     tap(scene, "left")
     assert(SettingsState.sfx_volume == 100,
-        "pressing left while row 3 is selected should not change sfx_volume, got " .. tostring(SettingsState.sfx_volume))
+        "pressing left while row 4 is selected should not change sfx_volume, got " .. tostring(SettingsState.sfx_volume))
 
-    assert(Save.settings_exists() == false, "left/right on row 1 or row 3 should never persist settings.dat")
+    assert(Save.settings_exists() == false, "left/right on row 1 or row 4 should never persist settings.dat")
 
-    print("PASS: settings_scene: left/right presses while row 1 or row 3 is selected do not change sfx_volume")
+    print("PASS: settings_scene: left/right presses while row 1 or row 4 is selected do not change sfx_volume")
 end
 
 -- Test 16: :gamepadpressed("dpleft")/:gamepadpressed("dpright") adjust
@@ -555,6 +562,201 @@ do
     scene:update(1 / 60) -- release frame
 
     print("PASS: settings_scene: a connected gamepad's dpleft/dpright drives volume adjustment through self.input's own gamepad_buttons polling")
+end
+
+-- Test 18: row 3's label reads "Music Volume: N%" -- defaults to 100% and
+-- updates once SettingsState.music_volume changes. Mirrors Test 12's SFX
+-- Volume label coverage.
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+    scene:open(false, nil, nil)
+
+    assert(scene:_top_item_label(3) == "Music Volume: 100%",
+        "row 3 should default to 'Music Volume: 100%', got " .. tostring(scene:_top_item_label(3)))
+
+    SettingsState:set_music_volume(90)
+    assert(scene:_top_item_label(3) == "Music Volume: 90%",
+        "row 3's label should reflect the updated music_volume, got " .. tostring(scene:_top_item_label(3)))
+
+    print("PASS: settings_scene: row 3's label reads 'Music Volume: N%' and updates after a volume change")
+end
+
+-- Test 19: navigating down from row 2 (SFX Volume) lands on row 3 (Music
+-- Volume), and down again lands on row 4 (Back/Main Menu) -- wrap-around
+-- coverage specific to the new Music Volume row, complementing Test 1's
+-- full-cycle check.
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+    scene:open(false, nil, nil)
+    scene.selected = 2
+
+    tap(scene, "s")
+    assert(scene.selected == 3, "pressing down from row 2 (SFX Volume) should land on row 3 (Music Volume), got " .. tostring(scene.selected))
+
+    tap(scene, "s")
+    assert(scene.selected == 4, "pressing down from row 3 (Music Volume) should land on row 4 (Back/Main Menu), got " .. tostring(scene.selected))
+
+    print("PASS: settings_scene: navigating down from SFX Volume lands on Music Volume, then Back/Main Menu")
+end
+
+-- Test 20: pressing "right" while row 3 (Music Volume) is selected increases
+-- SettingsState.music_volume by 10, capped at 100, and persists immediately
+-- via Save.write_settings -- mirrors Test 13's SFX Volume coverage.
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+    scene:open(false, nil, nil)
+    scene.selected = 3
+
+    assert(SettingsState.music_volume == 100, "sanity: music_volume should default to 100")
+    assert(Save.settings_exists() == false, "sanity: no settings.dat should exist before any change")
+
+    tap(scene, "right")
+    assert(SettingsState.music_volume == 100,
+        "pressing right at the ceiling (100) should stay capped at 100, got " .. tostring(SettingsState.music_volume))
+    assert(Save.settings_exists() == true, "pressing right on the Music Volume row should persist via Save.write_settings")
+    local saved = Save.read_settings()
+    assert(saved.music_volume == 100, "the persisted settings.dat should reflect music_volume == 100")
+
+    -- Lower it first so a subsequent right-press shows an actual increase.
+    SettingsState:set_music_volume(50)
+    Save.write_settings(SettingsState:to_save())
+
+    tap(scene, "right")
+    assert(SettingsState.music_volume == 60,
+        "pressing right on row 3 should increase music_volume by 10, got " .. tostring(SettingsState.music_volume))
+    saved = Save.read_settings()
+    assert(saved.music_volume == 60, "the persisted settings.dat should reflect the increased music_volume")
+
+    print("PASS: settings_scene: pressing right on the Music Volume row increases music_volume by 10 (capped at 100) and persists")
+end
+
+-- Test 21: pressing "left" while row 3 (Music Volume) is selected decreases
+-- SettingsState.music_volume by 10, floored at 0, and persists immediately
+-- -- mirrors Test 14's SFX Volume coverage.
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+    scene:open(false, nil, nil)
+    scene.selected = 3
+
+    SettingsState:set_music_volume(5)
+    Save.write_settings(SettingsState:to_save())
+
+    tap(scene, "left")
+    assert(SettingsState.music_volume == 0,
+        "pressing left on row 3 should decrease music_volume by 10, floored at 0, got " .. tostring(SettingsState.music_volume))
+    local saved = Save.read_settings()
+    assert(saved.music_volume == 0, "the persisted settings.dat should reflect the floored music_volume")
+
+    tap(scene, "left")
+    assert(SettingsState.music_volume == 0,
+        "pressing left at the floor (0) should stay floored at 0, got " .. tostring(SettingsState.music_volume))
+
+    print("PASS: settings_scene: pressing left on the Music Volume row decreases music_volume by 10 (floored at 0) and persists")
+end
+
+-- Test 22: left/right presses while row 1 (Fullscreen), row 2 (SFX Volume),
+-- or row 4 (Back/Main Menu) is selected are no-ops for music_volume --
+-- music_volume only responds to left/right while row 3 is selected, per
+-- SettingsScene:update's guard. Mirrors Test 15's sfx_volume coverage.
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+    scene:open(false, nil, nil)
+    assert(scene.selected == 1, "sanity: scene should open with selected == 1")
+
+    tap(scene, "right")
+    assert(SettingsState.music_volume == 100,
+        "pressing right while row 1 is selected should not change music_volume, got " .. tostring(SettingsState.music_volume))
+    tap(scene, "left")
+    assert(SettingsState.music_volume == 100,
+        "pressing left while row 1 is selected should not change music_volume, got " .. tostring(SettingsState.music_volume))
+
+    scene.selected = 2
+    tap(scene, "right")
+    assert(SettingsState.music_volume == 100,
+        "pressing right while row 2 is selected should not change music_volume, got " .. tostring(SettingsState.music_volume))
+    tap(scene, "left")
+    assert(SettingsState.music_volume == 100,
+        "pressing left while row 2 is selected should not change music_volume, got " .. tostring(SettingsState.music_volume))
+
+    scene.selected = 4
+    tap(scene, "right")
+    assert(SettingsState.music_volume == 100,
+        "pressing right while row 4 is selected should not change music_volume, got " .. tostring(SettingsState.music_volume))
+    tap(scene, "left")
+    assert(SettingsState.music_volume == 100,
+        "pressing left while row 4 is selected should not change music_volume, got " .. tostring(SettingsState.music_volume))
+
+    print("PASS: settings_scene: left/right presses while row 1, 2, or 4 is selected do not change music_volume")
+end
+
+-- Test 23: :gamepadpressed("dpleft")/:gamepadpressed("dpright") adjust
+-- music_volume the same way keyboard left/right do when row 3 is selected --
+-- mirrors Test 16's sfx_volume gamepad-event coverage.
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+    scene:open(false, nil, nil)
+    scene.selected = 3
+
+    assert(SettingsState.music_volume == 100, "sanity: music_volume should default to 100")
+
+    local consumed = scene:gamepadpressed("dpleft")
+    assert(consumed == true, "dpleft should be consumed by gamepad volume control")
+    assert(SettingsState.music_volume == 90,
+        "dpleft should decrease music_volume by 10 while row 3 is selected, got " .. tostring(SettingsState.music_volume))
+    assert(Save.settings_exists() == true, "dpleft on row 3 should persist via Save.write_settings")
+    local saved = Save.read_settings()
+    assert(saved.music_volume == 90, "the persisted settings.dat should reflect the decreased music_volume")
+
+    consumed = scene:gamepadpressed("dpright")
+    assert(consumed == true, "dpright should be consumed by gamepad volume control")
+    assert(SettingsState.music_volume == 100,
+        "dpright should increase music_volume by 10 while row 3 is selected, got " .. tostring(SettingsState.music_volume))
+    saved = Save.read_settings()
+    assert(saved.music_volume == 100, "the persisted settings.dat should reflect the increased music_volume")
+
+    print("PASS: settings_scene: :gamepadpressed('dpleft'/'dpright') adjusts music_volume like keyboard left/right when row 3 is selected")
+end
+
+-- Test 24: gamepad dpleft/dpright volume control for Music Volume also
+-- works through the shared self.input instance's own gamepad polling (not
+-- just the :gamepadpressed event dispatch tested above) -- mirrors Test 17's
+-- self.input-polling coverage for SFX Volume.
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+    scene:open(false, nil, nil)
+    scene.selected = 3
+
+    with_joysticks({ fake_stick({ dpleft = true }) }, function()
+        scene:update(1 / 60)
+    end)
+    assert(SettingsState.music_volume == 90,
+        "a connected gamepad holding dpleft should decrease music_volume via self.input's own polling, got " .. tostring(SettingsState.music_volume))
+
+    scene:update(1 / 60) -- release frame, resets the edge
+
+    with_joysticks({ fake_stick({ dpright = true }) }, function()
+        scene:update(1 / 60)
+    end)
+    assert(SettingsState.music_volume == 100,
+        "a connected gamepad holding dpright should increase music_volume via self.input's own polling, got " .. tostring(SettingsState.music_volume))
+
+    scene:update(1 / 60) -- release frame
+
+    print("PASS: settings_scene: a connected gamepad's dpleft/dpright drives Music Volume adjustment through self.input's own gamepad_buttons polling")
 end
 
 print("ALL TESTS PASSED")

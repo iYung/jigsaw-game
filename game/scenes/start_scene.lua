@@ -69,6 +69,9 @@ end
 
 function StartScene:on_enter()
     self._has_save = Save.exists()
+    if not Sound.is_music_playing("menu") then
+        Sound.play_music("menu")
+    end
 end
 
 function StartScene:on_exit() end
@@ -94,6 +97,7 @@ function StartScene:_confirm()
         if GameState.player_count == 2 then
             self.manager:switch(ControllerSelectScene.new(self.manager))
         else
+            Sound.fade_music("menu", 0, 2)
             self.manager:switch(GameScene.new())
         end
     elseif self.selected == 2 then
@@ -108,6 +112,7 @@ function StartScene:_confirm()
         if GameState.player_count == 2 then
             self.manager:switch(ControllerSelectScene.new(self.manager, data.scene))
         else
+            Sound.fade_music("menu", 0, 2)
             self.manager:switch(GameScene.new(data.scene))
         end
     elseif self.selected == 4 then

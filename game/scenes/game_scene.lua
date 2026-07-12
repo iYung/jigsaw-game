@@ -31,10 +31,24 @@ function GameScene.new(save_data, input_assignments)
     -- decide whether ESC/Start opens the Settings overlay instead of the
     -- old save-and-return-to-menu behavior.
     self.esc_opens_settings = true
+    self._bg_list = { "bg1", "bg2", "bg3", "bg4" }
+    self._bg_index = math.random(4)
     return self
 end
 
 function GameScene:on_enter()
+    Sound.stop_music("menu")
+    local bg_already_playing = false
+    for _, name in ipairs(self._bg_list) do
+        if Sound.is_music_playing(name) then
+            bg_already_playing = true
+            break
+        end
+    end
+    if not bg_already_playing then
+        Sound.fade_music(self._bg_list[self._bg_index], 1, 2)
+    end
+
     local WORLD_W = 20 * C.SLOT  -- 1280px
     local WORLD_H = 10 * C.SLOT  -- 640px
 
@@ -288,6 +302,11 @@ function GameScene:_spawn_box()
 end
 
 function GameScene:update(dt)
+    if not Sound.is_music_playing(self._bg_list[self._bg_index]) then
+        self._bg_index = (self._bg_index % #self._bg_list) + 1
+        Sound.fade_music(self._bg_list[self._bg_index], 1, 2)
+    end
+
     for _, box in ipairs(self.boxes) do
         local was_flying = box.state == "flying"
         box:update(dt, self.pieces)

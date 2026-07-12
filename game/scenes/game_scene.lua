@@ -89,6 +89,42 @@ function GameScene:on_enter()
             self.pieces[#self.pieces + 1] = JigsawPiece.from_save(piece_data)
         end
 
+        -- (e) rebuild self.active_puzzles directly from the saved field
+        -- (defaults to {} for pre-fix saves, which had no such field -- no
+        -- crash, just no retroactive recovery of their in-progress
+        -- puzzles). Must run after (b), which restores
+        -- self.player.held_piece, and after (c), which populates
+        -- self.pieces -- each saved entry's pieces list is built by
+        -- scanning self.pieces for matching path, plus held_piece when it
+        -- matches too (a held piece is never in self.pieces, so without
+        -- this it would never be picked up here). Keep the per-path pieces
+        -- tables around so the box-rebuild loop below can wire the same
+        -- table reference into box.spawned.
+        self.active_puzzles = {}
+        local active_pieces_by_path = {}
+        for _, entry_data in ipairs(self._save_data.active_puzzles or {}) do
+            local matched = {}
+            for _, p in ipairs(self.pieces) do
+                if p.path == entry_data.path then
+                    matched[#matched + 1] = p
+                end
+            end
+            if self.player.held_piece and self.player.held_piece.path == entry_data.path then
+                matched[#matched + 1] = self.player.held_piece
+            end
+            active_pieces_by_path[entry_data.path] = matched
+            self.active_puzzles[#self.active_puzzles + 1] = {
+                pieces = matched,
+                piece_count = entry_data.piece_count,
+                solved = false,
+                image = love.graphics.newImage(entry_data.path),
+                cols = entry_data.cols,
+                rows = entry_data.rows,
+                tier = entry_data.tier,
+                path = entry_data.path,
+            }
+        end
+
         -- (d) rebuild boxes, explicitly added to the drawer (unlike pieces,
         -- boxes are not lazily added by update())
         self.boxes = {}
@@ -97,25 +133,16 @@ function GameScene:on_enter()
             self.boxes[#self.boxes + 1] = box
             self.drawer:add(box, C.PRIORITY_PIECE)
 
-            -- (e) re-derive box.spawned and the active_puzzles bookkeeping
-            -- entry from the restored pieces that belong to this box
-            local matched = {}
-            for _, p in ipairs(self.pieces) do
-                if p.path == box.path then
-                    matched[#matched + 1] = p
-                end
-            end
-            box.spawned = matched
-            self.active_puzzles[#self.active_puzzles + 1] = {
-                pieces = matched,
-                piece_count = box.piece_count,
-                solved = false,
-                image = box.image,
-                cols = box.cols,
-                rows = box.rows,
-                tier = box.tier,
-                path = box.path,
-            }
+            -- Reuse the same pieces table built in (e) above for this
+            -- box's path -- not a copy -- so that if the box is still
+            -- "ejecting", newly-spawned pieces (JigsawBox:_eject_next's
+            -- self.spawned[#self.spawned + 1] = piece) land in the same
+            -- table the completion check in update() iterates. Falls back
+            -- to the empty table JigsawBox.from_save() already gave it
+            -- (rather than nil) for a pre-fix save with boxes but no
+            -- matching active_puzzles entry, so ejection still has a table
+            -- to append to instead of crashing.
+            box.spawned = active_pieces_by_path[box.path] or box.spawned
         end
 
         -- (f) rebuild shelved/completed puzzles
@@ -525,6 +552,25 @@ function GameScene:to_save()
         }
     end
 
+    -- Puzzles still in progress must be saved explicitly -- their
+    -- completion tracking can't be re-derived from self.boxes alone on
+    -- restore, since a box is removed the moment its last piece ejects,
+    -- well before the puzzle is actually solved. Image isn't saved -- like
+    -- completed_puzzles above, it's reloaded from `path` via
+    -- love.graphics.newImage on restore.
+    local active_puzzles = {}
+    for _, entry in ipairs(self.active_puzzles) do
+        if not entry.solved then
+            active_puzzles[#active_puzzles + 1] = {
+                path = entry.path,
+                tier = entry.tier,
+                cols = entry.cols,
+                rows = entry.rows,
+                piece_count = entry.piece_count,
+            }
+        end
+    end
+
     return {
         player = {
             x = self.player.sprite.x,
@@ -534,6 +580,7 @@ function GameScene:to_save()
         pieces = pieces,
         boxes = boxes,
         completed_puzzles = completed_puzzles,
+        active_puzzles = active_puzzles,
         shelf_row_x = self.shelf_row_x,
         shelf_row_bottom = self.shelf_row_bottom,
         shelf_row_max_height = self.shelf_row_max_height,

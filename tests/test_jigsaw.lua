@@ -2010,6 +2010,257 @@ do
     print("PASS: game_scene: active_puzzles entries from on_enter() and _spawn_box() carry image/cols/rows matching their box")
 end
 
+-- integration: Continue-resume completion detection --------------------
+-- (docs/design/fix-continue-completion-detection.md,
+-- docs/checklists/fix-continue-completion-detection.md, Task B).
+--
+-- GameScene:to_save() now writes an explicit active_puzzles field, and
+-- on_enter()'s restore branch rebuilds self.active_puzzles directly from
+-- it (matching self.pieces + self.player.held_piece by path) instead of
+-- re-deriving active_puzzles solely from self._save_data.boxes. These
+-- tests drive GameScene.new(save_data):on_enter() with hand-built save
+-- tables (shaped like real to_save() output) to exercise that restore
+-- path end-to-end.
+
+-- primary regression test: a puzzle whose box had already fully ejected
+-- (no box left in self._save_data.boxes) before save must still solve and
+-- fire completion after Continue, once correctly arranged -------------
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    -- assets/puzzles/easy/... resolves to a 192x192 stub image under the
+    -- headless love.graphics.newImage stub, i.e. a 3x3 (9-piece) grid.
+    local path = "assets/puzzles/easy/1.png"
+
+    -- All 9 pieces already ejected, grounded, and correctly arranged
+    -- (rotation_step 0, sprite position == col*SLOT/row*SLOT) -- as if the
+    -- player had already laid the puzzle out perfectly before saving.
+    local pieces_save = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            pieces_save[#pieces_save + 1] = {
+                path = path, row = row, col = col, rotation_step = 0,
+                x = col * C.SLOT, y = row * C.SLOT,
+            }
+        end
+    end
+
+    local save_data = {
+        player = { x = 0, y = 3 * C.SLOT },
+        pieces = pieces_save,
+        boxes = {},  -- box already fully ejected -- nothing left to save
+        completed_puzzles = {},
+        active_puzzles = {
+            { path = path, tier = "easy", cols = 3, rows = 3, piece_count = 9 },
+        },
+        shelf_row_x = 0, shelf_row_bottom = -C.SLOT, shelf_row_max_height = 0,
+    }
+
+    local gs = GameScene.new(save_data)
+    gs:on_enter()
+
+    assert(#gs.boxes == 0, "sanity check: no boxes should be restored for a puzzle whose box had already fully ejected")
+    assert(#gs.active_puzzles == 1,
+        "on_enter() should rebuild an active_puzzles entry from the saved active_puzzles field even with no box, got " .. #gs.active_puzzles)
+    local entry = gs.active_puzzles[1]
+    assert(#entry.pieces == 9,
+        "restored entry.pieces should include all 9 pieces matched by path from self.pieces, got " .. #entry.pieces)
+    assert(entry.piece_count == 9, "restored entry.piece_count should be 9, got " .. tostring(entry.piece_count))
+
+    gs:update(1 / 60)
+
+    assert(entry.solved == true,
+        "puzzle should solve after Continue even though its box had already fully ejected before save (the reported bug)")
+    assert(GameState.solved_count == 1,
+        "GameState.solved_count should increase once the resumed puzzle solves, got " .. GameState.solved_count)
+    for _, p in ipairs(entry.pieces) do
+        assert(p.state == "vanishing", "every piece should start vanishing once the resumed puzzle is detected solved")
+    end
+
+    gs:update(C.PIECE_FADE_DURATION)
+
+    assert(#gs.completed_puzzles == 1,
+        "solved puzzle should be shelved onto completed_puzzles once fully faded, got " .. #gs.completed_puzzles)
+    print("PASS: game_scene: resumed puzzle whose box had already fully ejected before save still solves and fires completion")
+end
+
+-- guard against regression: a puzzle saved with a box still 'ejecting'
+-- continues to solve correctly after reload ----------------------------
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local path = "assets/puzzles/easy/1.png"
+
+    -- Row 0 (3 pieces) already ejected and grounded before save; rows 1-2
+    -- (6 cells) still queued in the box's pieces_to_spawn.
+    local pieces_save = {}
+    for col = 0, 2 do
+        pieces_save[#pieces_save + 1] = {
+            path = path, row = 0, col = col, rotation_step = 0,
+            x = col * C.SLOT, y = 0 * C.SLOT,
+        }
+    end
+
+    local remaining = {}
+    for row = 1, 2 do
+        for col = 0, 2 do
+            remaining[#remaining + 1] = { row = row, col = col }
+        end
+    end
+
+    local save_data = {
+        player = { x = 0, y = 3 * C.SLOT },
+        pieces = pieces_save,
+        boxes = {
+            {
+                path = path, tier = "easy", state = "ejecting",
+                target_x = 5 * C.SLOT, target_y = 3 * C.SLOT,
+                pieces_to_spawn = remaining,
+            },
+        },
+        completed_puzzles = {},
+        active_puzzles = {
+            { path = path, tier = "easy", cols = 3, rows = 3, piece_count = 9 },
+        },
+        shelf_row_x = 0, shelf_row_bottom = -C.SLOT, shelf_row_max_height = 0,
+    }
+
+    local gs = GameScene.new(save_data)
+    gs:on_enter()
+
+    assert(#gs.boxes == 1, "sanity check: a still-ejecting box should be restored into gs.boxes")
+    local box = gs.boxes[1]
+    assert(box.state == "ejecting", "restored box should still be in state 'ejecting', got " .. tostring(box.state))
+    local entry = gs.active_puzzles[1]
+    assert(#entry.pieces == 3,
+        "entry.pieces should start with just the 3 already-ejected pieces, got " .. #entry.pieces)
+    assert(box.spawned == entry.pieces,
+        "box.spawned should be the same table reference as entry.pieces so newly-ejected pieces land where the completion check looks")
+
+    -- Drive ejection to completion -- from_save() sets spawn_timer to 0.3
+    -- for a restored 'ejecting' box, so one large-dt update() call ejects
+    -- exactly one piece each (same convention as the box-only ejection
+    -- tests above).
+    for _ = 1, #remaining do
+        gs:update(1.0)
+    end
+
+    assert(#gs.boxes == 0, "box should be removed from gs.boxes once ejection completes ('done'), got " .. #gs.boxes)
+    assert(#entry.pieces == 9,
+        "all 9 pieces should be tracked in the resumed entry.pieces once ejection finishes, got " .. #entry.pieces)
+
+    -- Arrange every piece into a correctly-solved layout, undoing whatever
+    -- random rotation/position ejection gave each one -- same technique as
+    -- the "assembling the puzzle" integration tests above.
+    for _, p in ipairs(entry.pieces) do
+        for _ = 1, (4 - p.rotation_step) % 4 do p:rotate() end
+        p.sprite.x = p.col * C.SLOT
+        p.sprite.y = p.row * C.SLOT
+    end
+
+    gs:update(1 / 60)
+
+    assert(entry.solved == true,
+        "puzzle saved mid-ejection should still solve correctly after reload once correctly arranged")
+    assert(GameState.solved_count == 1,
+        "GameState.solved_count should increase once the resumed puzzle solves, got " .. GameState.solved_count)
+    print("PASS: game_scene: resumed puzzle whose box was still 'ejecting' at save time solves correctly after reload")
+end
+
+-- a puzzle saved while one of its pieces was held by the player still
+-- reaches piece_count and solves once dropped correctly after reload ---
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+    local HeadlessInput = require("lua/headless/input")
+
+    local path = "assets/puzzles/easy/1.png"
+
+    -- 8 of the 9 pieces already ejected, grounded, and correctly arranged;
+    -- the 9th (row=2, col=2) was in the player's hand at save time.
+    local pieces_save = {}
+    for row = 0, 2 do
+        for col = 0, 2 do
+            if not (row == 2 and col == 2) then
+                pieces_save[#pieces_save + 1] = {
+                    path = path, row = row, col = col, rotation_step = 0,
+                    x = col * C.SLOT, y = row * C.SLOT,
+                }
+            end
+        end
+    end
+
+    -- Player parked exactly on the missing piece's slot (2*SLOT, 2*SLOT) so
+    -- that Player:drop_target() snaps a drop right back to that cell --
+    -- Player:centre() is sprite position + C.U, and drop_target subtracts
+    -- C.U back off, so a grid-aligned player position drops onto itself.
+    local save_data = {
+        player = {
+            x = 2 * C.SLOT, y = 2 * C.SLOT,
+            held_piece = { path = path, row = 2, col = 2, rotation_step = 0, x = 2 * C.SLOT, y = 2 * C.SLOT },
+        },
+        pieces = pieces_save,
+        boxes = {},
+        completed_puzzles = {},
+        active_puzzles = {
+            { path = path, tier = "easy", cols = 3, rows = 3, piece_count = 9 },
+        },
+        shelf_row_x = 0, shelf_row_bottom = -C.SLOT, shelf_row_max_height = 0,
+    }
+
+    local gs = GameScene.new(save_data)
+    gs:on_enter()
+
+    assert(gs.player.held_piece ~= nil, "sanity check: the held piece should be restored onto self.player.held_piece")
+    assert(gs.player.held_piece.state == "held", "restored held piece should be in state 'held'")
+    local entry = gs.active_puzzles[1]
+    assert(#entry.pieces == 9,
+        "entry.pieces should reach piece_count by including the held piece even though it isn't in self.pieces, got " .. #entry.pieces)
+
+    -- Drop the held piece through the real Player:update() interact path.
+    gs.player.input = HeadlessInput.new()
+    gs.player.input:press("interact")
+    gs:update(1 / 60)
+
+    assert(gs.player.held_piece == nil, "piece should no longer be held after the drop")
+    assert(entry.solved == true,
+        "puzzle should solve once the previously-held piece is dropped correctly after reload")
+    assert(GameState.solved_count == 1,
+        "GameState.solved_count should increase once the resumed puzzle solves, got " .. GameState.solved_count)
+    print("PASS: game_scene: resumed puzzle with a piece held at save time reaches piece_count and solves once dropped correctly")
+end
+
+-- an old-format save missing the new active_puzzles field loads without
+-- erroring (defaults to no in-progress-puzzle tracking, not a crash) ----
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+
+    local save_data = {
+        player = { x = 0, y = 3 * C.SLOT },
+        pieces = {},
+        boxes = {},
+        completed_puzzles = {},
+        -- deliberately no active_puzzles field -- simulates a save written
+        -- before this fix existed
+        shelf_row_x = 0, shelf_row_bottom = -C.SLOT, shelf_row_max_height = 0,
+    }
+
+    local gs = GameScene.new(save_data)
+    local ok, err = pcall(function() gs:on_enter() end)
+
+    assert(ok, "on_enter() should not error on an old-format save missing active_puzzles, got error: " .. tostring(err))
+    assert(type(gs.active_puzzles) == "table" and #gs.active_puzzles == 0,
+        "active_puzzles should default to an empty table when the saved field is absent, got " .. tostring(#gs.active_puzzles))
+    print("PASS: game_scene: on_enter() tolerates an old-format save missing the active_puzzles field (no crash, defaults to empty)")
+end
+
 -- integration: a fully-faded solved puzzle is shelved onto completed_puzzles
 -- at the deterministic left-to-right slot position (trophy shelf) ----------
 

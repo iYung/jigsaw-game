@@ -16,9 +16,9 @@
 --                      frozen game world. Shows a "Main Menu" row instead of
 --                      "Back".
 --
--- Settings exposed today are the fullscreen toggle and SFX volume --
--- keybind remapping was deliberately dropped, see git history for the
--- removed Keybinds subscreen.
+-- Settings exposed today are the fullscreen toggle, SFX volume, and Music
+-- volume -- keybind remapping was deliberately dropped, see git history for
+-- the removed Keybinds subscreen.
 local SettingsState = require("game/settings_state")
 local Save           = require("lua/core/save")
 local Input           = require("lua/core/input")
@@ -41,17 +41,20 @@ local SELECTED_COLOR = { 0.55, 0.55, 0.55, 1 }
 
 local OPAQUE_BG_COLOR = { 0.08, 0.08, 0.08, 1 }
 
--- Top-level item list always has exactly 3 rows; row 1 is the fullscreen
--- toggle, row 2 is the SFX volume control, and row 3's label/action flips
--- between "Back" (opaque) and "Main Menu" (overlay) -- see
--- :_top_item_label / :_confirm_top below. This satisfies the design doc's
--- "Back is opaque-only, Main Menu is overlay-only" requirement without
--- needing a variable-length item list, since the two are mutually exclusive
--- per mode.
-local TOP_ITEM_COUNT = 3
+-- Top-level item list always has exactly 4 rows; row 1 is the fullscreen
+-- toggle, row 2 is the SFX volume control, row 3 is the music volume
+-- control, and row 4's label/action flips between "Back" (opaque) and
+-- "Main Menu" (overlay) -- see :_top_item_label / :_confirm_top below. This
+-- satisfies the design doc's "Back is opaque-only, Main Menu is
+-- overlay-only" requirement without needing a variable-length item list,
+-- since the two are mutually exclusive per mode.
+local TOP_ITEM_COUNT = 4
 
 -- Amount SFX volume changes per left/right press (see :_adjust_volume).
 local SFX_VOLUME_STEP = 10
+
+-- Amount music volume changes per left/right press (see :_adjust_volume).
+local MUSIC_VOLUME_STEP = 10
 
 -- Gamepad buttons that drive this scene's own menu-nav Input instance.
 local GAMEPAD_NAV_ACTION = { dpup = "up", dpdown = "down", dpleft = "left", dpright = "right", a = "confirm" }
@@ -68,7 +71,8 @@ function SettingsScene.new()
     -- (start_scene.lua:29-44) minus any escape/close action -- closing
     -- Settings is handled one level up, by main.lua's global
     -- keypressed/gamepadpressed callbacks, exactly like StartScene has no
-    -- "quit" action of its own. left/right drive the SFX Volume row (row 2).
+    -- "quit" action of its own. left/right drive the SFX Volume row (row 2)
+    -- and the Music Volume row (row 3).
     self.input = Input.new({
         up      = { "w", "up" },
         down    = { "s", "down" },
@@ -121,6 +125,8 @@ function SettingsScene:_top_item_label(i)
     elseif i == 2 then
         return "SFX Volume: " .. SettingsState.sfx_volume .. "%"
     elseif i == 3 then
+        return "Music Volume: " .. SettingsState.music_volume .. "%"
+    elseif i == 4 then
         return self._opaque and "Back" or "Main Menu"
     end
 end
@@ -164,13 +170,18 @@ function SettingsScene:_go_to_main_menu()
 end
 
 -- Shared by :update()'s left/right polling and :gamepadpressed()'s
--- dpleft/dpright handling -- adjusts the SFX volume by `delta` (already
--- signed, e.g. +SFX_VOLUME_STEP / -SFX_VOLUME_STEP), persists immediately
--- (same pattern the fullscreen toggle uses in :_confirm()), and plays the
--- nav SFX cue. Only meaningful when row 2 (SFX Volume) is selected --
--- callers are expected to guard on that themselves.
+-- dpleft/dpright handling -- adjusts the SFX volume (row 2) or Music volume
+-- (row 3) by `delta` (already signed, e.g. +SFX_VOLUME_STEP /
+-- -SFX_VOLUME_STEP or the music equivalent), persists immediately (same
+-- pattern the fullscreen toggle uses in :_confirm()), and plays the nav SFX
+-- cue. Only meaningful when row 2 or row 3 is selected -- callers are
+-- expected to guard on that themselves.
 function SettingsScene:_adjust_volume(delta)
-    SettingsState:set_sfx_volume(SettingsState.sfx_volume + delta)
+    if self.selected == 3 then
+        SettingsState:set_music_volume(SettingsState.music_volume + delta)
+    else
+        SettingsState:set_sfx_volume(SettingsState.sfx_volume + delta)
+    end
     Save.write_settings(SettingsState:to_save())
     Sound.play("menu_navigate")
 end
@@ -180,7 +191,7 @@ function SettingsScene:_confirm()
         SettingsState:toggle_fullscreen()
         Save.write_settings(SettingsState:to_save())
         Sound.play("menu_confirm")
-    elseif self.selected == 3 then
+    elseif self.selected == 4 then
         if self._opaque then
             self:close()
         else
@@ -209,6 +220,14 @@ function SettingsScene:update(dt)
         end
         if self.input:pressed("right") then
             self:_adjust_volume(SFX_VOLUME_STEP)
+        end
+    end
+    if self.selected == 3 then
+        if self.input:pressed("left") then
+            self:_adjust_volume(-MUSIC_VOLUME_STEP)
+        end
+        if self.input:pressed("right") then
+            self:_adjust_volume(MUSIC_VOLUME_STEP)
         end
     end
     if self.input:pressed("confirm") then
@@ -250,6 +269,8 @@ function SettingsScene:gamepadpressed(button)
     elseif action == "left" or action == "right" then
         if self.selected == 2 then
             self:_adjust_volume(action == "right" and SFX_VOLUME_STEP or -SFX_VOLUME_STEP)
+        elseif self.selected == 3 then
+            self:_adjust_volume(action == "right" and MUSIC_VOLUME_STEP or -MUSIC_VOLUME_STEP)
         end
     end
     return true

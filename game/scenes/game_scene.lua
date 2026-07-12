@@ -2,6 +2,7 @@ local Scene      = require("lua/core/scene")
 local Sprite     = require("lua/core/sprite")
 local Shader     = require("lua/core/shader")
 local Camera     = require("lua/core/camera")
+local Sound      = require("lua/core/sound")
 local Player     = require("game/player")
 local C          = require("game/constants")
 local JigsawBox  = require("game/jigsaw_box")
@@ -320,6 +321,7 @@ function GameScene:update(dt)
     for _, entry in ipairs(self.active_puzzles) do
         if not entry.solved and JigsawSolver.is_assembled(entry.pieces, entry.piece_count) then
             entry.solved = true
+            Sound.play("puzzle_complete")
             GameState:puzzle_solved(entry.tier)
             for _, piece in ipairs(entry.pieces) do
                 piece:start_vanish()

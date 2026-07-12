@@ -16,14 +16,15 @@
 --                      frozen game world. Shows a "Main Menu" row instead of
 --                      "Back".
 --
--- Only setting exposed today is the fullscreen toggle -- keybind remapping
--- was deliberately dropped, see git history for the removed Keybinds
--- subscreen.
+-- Settings exposed today are the fullscreen toggle and SFX volume --
+-- keybind remapping was deliberately dropped, see git history for the
+-- removed Keybinds subscreen.
 local SettingsState = require("game/settings_state")
 local Save           = require("lua/core/save")
 local Input           = require("lua/core/input")
 local StartScene      = require("game/scenes/start_scene")
 local GameState       = require("game/game_state")
+local Sound           = require("lua/core/sound")
 
 local SettingsScene = {}
 SettingsScene.__index = SettingsScene
@@ -40,16 +41,20 @@ local SELECTED_COLOR = { 0.55, 0.55, 0.55, 1 }
 
 local OPAQUE_BG_COLOR = { 0.08, 0.08, 0.08, 1 }
 
--- Top-level item list always has exactly 2 rows; index 2's label/action
--- flips between "Back" (opaque) and "Main Menu" (overlay) -- see
+-- Top-level item list always has exactly 3 rows; row 1 is the fullscreen
+-- toggle, row 2 is the SFX volume control, and row 3's label/action flips
+-- between "Back" (opaque) and "Main Menu" (overlay) -- see
 -- :_top_item_label / :_confirm_top below. This satisfies the design doc's
 -- "Back is opaque-only, Main Menu is overlay-only" requirement without
 -- needing a variable-length item list, since the two are mutually exclusive
 -- per mode.
-local TOP_ITEM_COUNT = 2
+local TOP_ITEM_COUNT = 3
+
+-- Amount SFX volume changes per left/right press (see :_adjust_volume).
+local SFX_VOLUME_STEP = 10
 
 -- Gamepad buttons that drive this scene's own menu-nav Input instance.
-local GAMEPAD_NAV_ACTION = { dpup = "up", dpdown = "down", a = "confirm" }
+local GAMEPAD_NAV_ACTION = { dpup = "up", dpdown = "down", dpleft = "left", dpright = "right", a = "confirm" }
 
 function SettingsScene.new()
     local self = setmetatable({}, SettingsScene)
@@ -60,18 +65,22 @@ function SettingsScene.new()
     self.selected = 1
 
     -- Own menu-nav Input instance, identical in shape to StartScene's
-    -- (start_scene.lua:29-44) minus left/right (this menu never needs
-    -- horizontal nav) and minus any escape/close action -- closing Settings
-    -- is handled one level up, by main.lua's global keypressed/gamepadpressed
-    -- callbacks, exactly like StartScene has no "quit" action of its own.
+    -- (start_scene.lua:29-44) minus any escape/close action -- closing
+    -- Settings is handled one level up, by main.lua's global
+    -- keypressed/gamepadpressed callbacks, exactly like StartScene has no
+    -- "quit" action of its own. left/right drive the SFX Volume row (row 2).
     self.input = Input.new({
         up      = { "w", "up" },
         down    = { "s", "down" },
+        left    = { "a", "left" },
+        right   = { "d", "right" },
         confirm = { "e", "return" },
     }, {
         gamepad_buttons = {
             up      = { "dpup" },
             down    = { "dpdown" },
+            left    = { "dpleft" },
+            right   = { "dpright" },
             confirm = { "a" },
         },
         joystick_scope = "first_two",
@@ -110,6 +119,8 @@ function SettingsScene:_top_item_label(i)
     if i == 1 then
         return SettingsState.fullscreen and "Window" or "Fullscreen"
     elseif i == 2 then
+        return "SFX Volume: " .. SettingsState.sfx_volume .. "%"
+    elseif i == 3 then
         return self._opaque and "Back" or "Main Menu"
     end
 end
@@ -152,16 +163,30 @@ function SettingsScene:_go_to_main_menu()
     self:close()
 end
 
+-- Shared by :update()'s left/right polling and :gamepadpressed()'s
+-- dpleft/dpright handling -- adjusts the SFX volume by `delta` (already
+-- signed, e.g. +SFX_VOLUME_STEP / -SFX_VOLUME_STEP), persists immediately
+-- (same pattern the fullscreen toggle uses in :_confirm()), and plays the
+-- nav SFX cue. Only meaningful when row 2 (SFX Volume) is selected --
+-- callers are expected to guard on that themselves.
+function SettingsScene:_adjust_volume(delta)
+    SettingsState:set_sfx_volume(SettingsState.sfx_volume + delta)
+    Save.write_settings(SettingsState:to_save())
+    Sound.play("menu_navigate")
+end
+
 function SettingsScene:_confirm()
     if self.selected == 1 then
         SettingsState:toggle_fullscreen()
         Save.write_settings(SettingsState:to_save())
-    elseif self.selected == 2 then
+        Sound.play("menu_confirm")
+    elseif self.selected == 3 then
         if self._opaque then
             self:close()
         else
             self:_go_to_main_menu()
         end
+        Sound.play("menu_confirm")
     end
 end
 
@@ -172,9 +197,19 @@ function SettingsScene:update(dt)
 
     if self.input:pressed("down") then
         self:_nav(1)
+        Sound.play("menu_navigate")
     end
     if self.input:pressed("up") then
         self:_nav(-1)
+        Sound.play("menu_navigate")
+    end
+    if self.selected == 2 then
+        if self.input:pressed("left") then
+            self:_adjust_volume(-SFX_VOLUME_STEP)
+        end
+        if self.input:pressed("right") then
+            self:_adjust_volume(SFX_VOLUME_STEP)
+        end
     end
     if self.input:pressed("confirm") then
         self:_confirm()
@@ -189,9 +224,10 @@ function SettingsScene:keypressed(key)
     return false
 end
 
--- Returns true iff the gamepad button press was consumed. Drives nav/confirm
--- (dpup/dpdown/a) directly, same reasoning as :update's polling but pre-empts
--- a same-frame double-fire -- see the _down pre-set below.
+-- Returns true iff the gamepad button press was consumed. Drives
+-- nav/confirm/volume (dpup/dpdown/dpleft/dpright/a) directly, same reasoning
+-- as :update's polling but pre-empts a same-frame double-fire -- see the
+-- _down pre-set below.
 function SettingsScene:gamepadpressed(button)
     if not self.is_open then return false end
 
@@ -208,8 +244,13 @@ function SettingsScene:gamepadpressed(button)
 
     if action == "confirm" then
         self:_confirm()
-    else
+    elseif action == "up" or action == "down" then
         self:_nav(action == "down" and 1 or -1)
+        Sound.play("menu_navigate")
+    elseif action == "left" or action == "right" then
+        if self.selected == 2 then
+            self:_adjust_volume(action == "right" and SFX_VOLUME_STEP or -SFX_VOLUME_STEP)
+        end
     end
     return true
 end

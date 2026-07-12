@@ -2,6 +2,7 @@ local Scene    = require("lua/core/scene")
 local GameScene = require("game/scenes/game_scene")
 local GameState = require("game/game_state")
 local C        = require("game/constants")
+local HeadlessInput = require("lua/headless/input")
 
 -- Test 1: Scene.new(w, h) passes dimensions to its camera
 do
@@ -218,6 +219,45 @@ do
 
     GameState:reset()
     print("PASS: scene: 2-player mode tracks view1/view2 and wall_target1/wall_target2 independently")
+end
+
+-- Test 12: full end-to-end round trip through real gs:update() ticks --
+-- entering wall view (player not yet frozen that frame) and then exiting it
+-- again (player now frozen, since view1 == "wall") both actually work.
+-- Regression test: Player:update()'s frozen early-return used to skip the
+-- wall_tile proximity check entirely, so once frozen there was no way back
+-- to "play" -- this reproduces that exact scenario through the same
+-- gs:update() call site the live game uses every frame.
+do
+    GameState:reset()
+
+    local gs = GameScene.new()
+    gs:on_enter()
+    gs.completed_puzzles = {
+        {x = 0, y = -64, cols = 1, rows = 1},
+    }
+
+    -- Stand the player exactly on the wall tile so proximity always holds.
+    gs.player.sprite.x, gs.player.sprite.y = gs.wall_tile.sprite.x, gs.wall_tile.sprite.y
+
+    gs.player.input = HeadlessInput.new()
+
+    -- Frame 1: not frozen yet (view1 starts "play") -- interact should
+    -- toggle into wall view.
+    gs.player.input:press("interact")
+    gs:update(1 / 60)
+    assert(gs.view1 == "wall", "first interact press should toggle view1 to 'wall', got " .. tostring(gs.view1))
+
+    -- Frame 2: now frozen (view1 == "wall"), same interact press again --
+    -- this is exactly the step that was broken.
+    gs.player.input:press("interact")
+    gs:update(1 / 60)
+    assert(gs.view1 == "play",
+        "second interact press while frozen should toggle view1 back to 'play' -- if this fails, " ..
+        "Player:update()'s frozen early-return is once again skipping the wall_tile check, got " ..
+        tostring(gs.view1))
+
+    print("PASS: scene: pressing interact again while frozen in wall view correctly returns to 'play'")
 end
 
 print("ALL TESTS PASSED")

@@ -77,7 +77,10 @@ do
     print("PASS: wall_view_tile: Player:update() does not call wall_tile:interact() while a piece is held")
 end
 
--- Player:update() with frozen == true: no movement, no interactions -------
+-- Player:update() with frozen == true: movement stays blocked, but the
+-- wall tile itself must still be interactable -- frozen is driven by
+-- already being in wall view, so if the tile stopped working the instant
+-- the player froze, there would be no way to ever toggle back out.
 
 do
     local player = Player.new(0, 0)
@@ -86,7 +89,7 @@ do
     player.input:press("interact")
 
     local presses = 0
-    local tile = WallViewTile.new(0, 0, function() presses = presses + 1 end)
+    local tile = WallViewTile.new(0, 0, function() presses = presses + 1 end)  -- centre (32, 32)
 
     local start_x, start_y = player.sprite.x, player.sprite.y
     player:update(1 / 60, {}, {}, nil, nil, tile, true)
@@ -94,8 +97,69 @@ do
     assert(player.sprite.x == start_x and player.sprite.y == start_y,
         "player position should be unchanged when frozen, even with a movement key held, got (" ..
         tostring(player.sprite.x) .. ", " .. tostring(player.sprite.y) .. ")")
-    assert(presses == 0, "wall_tile:interact() should NOT fire while frozen, got " .. presses .. " presses")
-    print("PASS: wall_view_tile: Player:update() applies no movement or interaction while frozen")
+    assert(presses == 1,
+        "wall_tile:interact() SHOULD fire while frozen and in range -- this is the only way to exit " ..
+        "wall view once the player is frozen there -- got " .. presses .. " presses")
+    print("PASS: wall_view_tile: Player:update() blocks movement but still allows the wall tile while frozen")
+end
+
+-- ...and the frozen wall_tile check is still gated the same way the
+-- not-frozen one is: out of range, or holding a piece, doesn't fire.
+
+do
+    local player = Player.new(0, 0)
+    player.input = HeadlessInput.new()
+    player.input:press("interact")
+
+    local presses = 0
+    local far_tile = WallViewTile.new(1000, 1000, function() presses = presses + 1 end)
+
+    player:update(1 / 60, {}, {}, nil, nil, far_tile, true)
+
+    assert(presses == 0, "an out-of-range wall_tile should not fire even while frozen, got " .. presses .. " presses")
+    print("PASS: wall_view_tile: frozen wall_tile check respects the proximity gate")
+end
+
+do
+    local JigsawPiece = require("game/jigsaw_piece")
+
+    local player = Player.new(0, 0)
+    player.input = HeadlessInput.new()
+    player.held_piece = JigsawPiece.new(0, {1, 0, 0, 1})
+    player.input:press("interact")
+
+    local presses = 0
+    local tile = WallViewTile.new(0, 0, function() presses = presses + 1 end)
+
+    player:update(1 / 60, {}, {}, nil, nil, tile, true)
+
+    assert(presses == 0, "wall_tile should not fire while frozen and holding a piece, got " .. presses .. " presses")
+    print("PASS: wall_view_tile: frozen wall_tile check respects the held-piece gate")
+end
+
+-- Full round trip: entering wall view (unfrozen call) and then exiting it
+-- (frozen call, same tile, second interact press) both invoke on_press --
+-- this is the actual toggle mechanic GameScene:_toggle_wall_view relies on.
+
+do
+    local player = Player.new(0, 0)
+    player.input = HeadlessInput.new()
+
+    local presses = 0
+    local tile = WallViewTile.new(0, 0, function() presses = presses + 1 end)
+
+    -- Enter: not frozen yet (view was "play" this frame).
+    player.input:press("interact")
+    player:update(1 / 60, {}, {}, nil, nil, tile, false)
+    assert(presses == 1, "entering wall view should fire on_press once, got " .. presses .. " presses")
+
+    -- Exit: now frozen (view became "wall" after the toggle above), same
+    -- tile, second press.
+    player.input:press("interact")
+    player:update(1 / 60, {}, {}, nil, nil, tile, true)
+    assert(presses == 2, "exiting wall view while frozen should fire on_press a second time, got " ..
+        presses .. " presses")
+    print("PASS: wall_view_tile: entering (unfrozen) and exiting (frozen) both reach wall_tile:interact()")
 end
 
 -- Player:update() still advances input edge-state while frozen -- self.input

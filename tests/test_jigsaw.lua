@@ -2637,10 +2637,11 @@ do
     print("PASS: game_scene: enforces the 3-active-puzzle cap")
 end
 
--- checkerboard floor -----------------------------------------------------
+-- image-based floor ---------------------------------------------------------
 -- GameScene:on_enter() halves the world size and replaces self.ground with
--- self.floor, a plain-table drawable registered in the drawer at priority 0
--- (docs/design/checkerboard-floor.md, docs/checklists/checkerboard-floor.md)
+-- self.floor, a plain-table drawable that draws a static floor.png image
+-- (same pattern as self.background), registered in the drawer at priority 0
+-- (docs/design/floor-png.md, docs/checklists/floor-png.md)
 
 do
     GameState:reset()
@@ -2665,9 +2666,9 @@ do
     assert(found_entry.priority == 0,
         "gs.floor should be registered at priority 0, got " .. tostring(found_entry.priority))
 
-    local ok, err = pcall(function() gs.floor.draw() end)
-    assert(ok, "gs.floor.draw() should not error under the headless love.graphics stub: " .. tostring(err))
-    print("PASS: game_scene: on_enter() halves world size and replaces self.ground with self.floor (checkerboard, priority 0)")
+    local ok, err = pcall(function() gs.floor:draw() end)
+    assert(ok, "gs.floor:draw() should not error under the headless love.graphics stub: " .. tostring(err))
+    print("PASS: game_scene: on_enter() halves world size and replaces self.ground with self.floor (image, priority 0)")
 end
 
 -- shelved entries restored from save data draw at C.PRIORITY_SHELF ----------

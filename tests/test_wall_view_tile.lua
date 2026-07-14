@@ -15,6 +15,21 @@ do
     print("PASS: wall_view_tile: centre() returns sprite center")
 end
 
+-- WallViewTile:draw() ------------------------------------------------------
+
+-- Smoke test, mirroring tests/test_settings_scene.lua's Test 25 and
+-- puzzle_pile's equivalent: :draw() must not error under the headless
+-- love.graphics stub now that it calls love.graphics.draw with an Image
+-- (TILE_IMAGE, loaded via love.graphics.newImage) instead of only
+-- love.graphics.rectangle.
+
+do
+    local tile = WallViewTile.new(0, 0, function() end)
+    local ok, err = pcall(function() tile:draw() end)
+    assert(ok, "WallViewTile:draw() should not error, got: " .. tostring(err))
+    print("PASS: wall_view_tile: :draw() does not error (image-backed tile)")
+end
+
 -- WallViewTile:interact() -------------------------------------------------
 
 -- Mirrors puzzle_pile's "interact() invokes on_press exactly once per call".

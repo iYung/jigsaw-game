@@ -36,8 +36,8 @@ local ITEM_H = 60
 local ITEM_GAP = 20
 local ITEMS_TOP = 220
 
-local NORMAL_COLOR   = { 0.35, 0.35, 0.35, 1 }
-local SELECTED_COLOR = { 0.55, 0.55, 0.55, 1 }
+local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
+local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
 
 local OPAQUE_BG_COLOR = { 0.08, 0.08, 0.08, 1 }
 
@@ -310,12 +310,9 @@ function SettingsScene:draw()
         local label = self:_top_item_label(i)
         local x, y, w, h = self:_item_rect(i)
 
-        if i == self.selected then
-            love.graphics.setColor(SELECTED_COLOR)
-        else
-            love.graphics.setColor(NORMAL_COLOR)
-        end
-        love.graphics.rectangle("fill", x, y, w, h)
+        local panel = (i == self.selected) and PANEL_SELECTED or PANEL_NORMAL
+        love.graphics.setColor(1, 1, 1, 1)
+        love.graphics.draw(panel, x, y, 0, w / panel:getWidth(), h / panel:getHeight())
 
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.printf(label, x, y + h / 2 - 8, w, "center")

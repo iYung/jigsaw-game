@@ -759,6 +759,34 @@ do
     print("PASS: settings_scene: a connected gamepad's dpleft/dpright drives Music Volume adjustment through self.input's own gamepad_buttons polling")
 end
 
+-- Test 25: :draw() doesn't error in either opaque or overlay mode, across
+-- both the normal and selected rows -- regression coverage for the
+-- panel_normal.png/panel_selected.png image-draw swap (see
+-- docs/design/menu-ui-pngs.md): :draw() now calls love.graphics.draw with
+-- an Image instead of only love.graphics.rectangle, and this must still be
+-- safe under the headless love.graphics stub (lua/headless/stubs.lua stubs
+-- newImage/draw so no real GPU/window is needed).
+do
+    reset_fs()
+    SettingsState:reset()
+    local scene = SettingsScene.new()
+
+    scene:open(true, nil, nil) -- opaque mode
+    local ok, err = pcall(function() scene:draw() end)
+    assert(ok, "SettingsScene:draw() should not error in opaque mode, got: " .. tostring(err))
+
+    scene.selected = 4
+    ok, err = pcall(function() scene:draw() end)
+    assert(ok, "SettingsScene:draw() should not error in opaque mode with a non-default row selected, got: " .. tostring(err))
+
+    local fake_scene = { to_save = function(self) return {} end }
+    scene:open(false, fake_scene, {}) -- overlay mode
+    ok, err = pcall(function() scene:draw() end)
+    assert(ok, "SettingsScene:draw() should not error in overlay mode, got: " .. tostring(err))
+
+    print("PASS: settings_scene: :draw() does not error in opaque or overlay mode, image-backed rows included")
+end
+
 print("ALL TESTS PASSED")
 
 -- Leave the process-lifetime SettingsState singleton clean for whichever

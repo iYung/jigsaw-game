@@ -8,8 +8,8 @@ ControllerSelectScene.__index = ControllerSelectScene
 
 local LOGICAL_W, LOGICAL_H = 1280, 720
 
-local NORMAL_COLOR   = { 0.35, 0.35, 0.35, 1 }
-local SELECTED_COLOR = { 0.55, 0.55, 0.55, 1 }
+local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
+local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
 
 local COLUMN_W = 360
 local COLUMN_TOP = 260
@@ -175,8 +175,8 @@ function ControllerSelectScene:draw()
     local mid_x = (LOGICAL_W / 2) - COLUMN_W / 2
 
     -- Player 1 column
-    love.graphics.setColor(NORMAL_COLOR)
-    love.graphics.rectangle("fill", left_x, COLUMN_TOP, COLUMN_W, COLUMN_H)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(PANEL_NORMAL, left_x, COLUMN_TOP, 0, COLUMN_W / PANEL_NORMAL:getWidth(), COLUMN_H / PANEL_NORMAL:getHeight())
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Player 1", left_x, COLUMN_TOP + 20, COLUMN_W, "center")
     love.graphics.printf(_label_for(self.p1_device, self._sources), left_x, COLUMN_TOP + 60, COLUMN_W, "center")
@@ -185,8 +185,8 @@ function ControllerSelectScene:draw()
     end
 
     -- Middle legend column
-    love.graphics.setColor(SELECTED_COLOR)
-    love.graphics.rectangle("fill", mid_x, COLUMN_TOP, COLUMN_W, COLUMN_H)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(PANEL_SELECTED, mid_x, COLUMN_TOP, 0, COLUMN_W / PANEL_SELECTED:getWidth(), COLUMN_H / PANEL_SELECTED:getHeight())
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Devices", mid_x, COLUMN_TOP + 20, COLUMN_W, "center")
     for i, source in ipairs(self:_unclaimed_sources()) do
@@ -194,8 +194,8 @@ function ControllerSelectScene:draw()
     end
 
     -- Player 2 column
-    love.graphics.setColor(NORMAL_COLOR)
-    love.graphics.rectangle("fill", right_x, COLUMN_TOP, COLUMN_W, COLUMN_H)
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(PANEL_NORMAL, right_x, COLUMN_TOP, 0, COLUMN_W / PANEL_NORMAL:getWidth(), COLUMN_H / PANEL_NORMAL:getHeight())
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Player 2", right_x, COLUMN_TOP + 20, COLUMN_W, "center")
     love.graphics.printf(_label_for(self.p2_device, self._sources), right_x, COLUMN_TOP + 60, COLUMN_W, "center")

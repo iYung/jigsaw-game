@@ -866,6 +866,30 @@ do
     print("PASS: start_scene: confirming Settings with on_settings omitted is a silent no-op and does not error")
 end
 
+-- Test 24: :draw() doesn't error, including the disabled-Continue branch
+-- (no save present) and the normal/selected branch -- regression coverage
+-- for the panel_normal.png/panel_selected.png image-draw swap (see
+-- docs/design/menu-ui-pngs.md): :draw() now calls love.graphics.draw with
+-- an Image instead of only love.graphics.rectangle, and this must still be
+-- safe under the headless love.graphics stub (lua/headless/stubs.lua stubs
+-- newImage/draw so no real GPU/window is needed).
+do
+    reset_fs()
+    local manager = {}
+    local scene = StartScene.new(manager)
+    scene:on_enter()
+    assert(scene._has_save == false, "sanity: no save present, so the Continue row is disabled")
+
+    local ok, err = pcall(function() scene:draw() end)
+    assert(ok, "StartScene:draw() should not error with the disabled Continue row present, got: " .. tostring(err))
+
+    scene.selected = 3
+    ok, err = pcall(function() scene:draw() end)
+    assert(ok, "StartScene:draw() should not error with a non-default row selected, got: " .. tostring(err))
+
+    print("PASS: start_scene: :draw() does not error, including the disabled Continue row, image-backed rows included")
+end
+
 print("ALL TESTS PASSED")
 
 -- Leave the process-lifetime GameState singleton clean for whichever test

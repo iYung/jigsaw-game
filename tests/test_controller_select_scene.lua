@@ -353,4 +353,25 @@ do
     print("PASS: controller_select_scene: fresh scene has escape_to_menu == true")
 end
 
+-- Test 6: :draw() doesn't error -- regression coverage for the
+-- panel_normal.png/panel_selected.png image-draw swap (see
+-- docs/design/menu-ui-pngs.md): :draw() now calls love.graphics.draw with
+-- an Image for all three panels instead of only love.graphics.rectangle,
+-- and this must still be safe under the headless love.graphics stub
+-- (lua/headless/stubs.lua stubs newImage/draw so no real GPU/window is
+-- needed).
+with_joysticks({ fake_stick() }, function()
+    local scene = ControllerSelectScene.new({})
+    scene:on_enter()
+
+    local ok, err = pcall(function() scene:draw() end)
+    assert(ok, "ControllerSelectScene:draw() should not error before any device is claimed, got: " .. tostring(err))
+
+    tap_key(scene, "a") -- keyboard claims p1
+    ok, err = pcall(function() scene:draw() end)
+    assert(ok, "ControllerSelectScene:draw() should not error once a device has claimed a slot, got: " .. tostring(err))
+
+    print("PASS: controller_select_scene: :draw() does not error, image-backed panels included")
+end)
+
 print("ALL TESTS PASSED")

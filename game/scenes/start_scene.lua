@@ -16,8 +16,8 @@ local ITEM_H = 60
 local ITEM_GAP = 20
 local ITEMS_TOP = 340
 
-local NORMAL_COLOR   = { 0.35, 0.35, 0.35, 1 }
-local SELECTED_COLOR = { 0.55, 0.55, 0.55, 1 }
+local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
+local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
 
 function StartScene.new(manager, on_settings)
     local self = Scene.new(LOGICAL_W, LOGICAL_H)
@@ -192,19 +192,15 @@ function StartScene:draw()
             end
         end
         if i == 2 and not self._has_save then
-            local r, g, b = NORMAL_COLOR[1], NORMAL_COLOR[2], NORMAL_COLOR[3]
-            love.graphics.setColor(r, g, b, 0.4)
-            love.graphics.rectangle("fill", x, y, w, h)
+            love.graphics.setColor(1, 1, 1, 0.4)
+            love.graphics.draw(PANEL_NORMAL, x, y, 0, w / PANEL_NORMAL:getWidth(), h / PANEL_NORMAL:getHeight())
 
             love.graphics.setColor(1, 1, 1, 0.4)
             love.graphics.printf(label, x, y + h / 2 - 8, w, "center")
         else
-            if i == self.selected then
-                love.graphics.setColor(SELECTED_COLOR)
-            else
-                love.graphics.setColor(NORMAL_COLOR)
-            end
-            love.graphics.rectangle("fill", x, y, w, h)
+            local panel = (i == self.selected) and PANEL_SELECTED or PANEL_NORMAL
+            love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(panel, x, y, 0, w / panel:getWidth(), h / panel:getHeight())
 
             love.graphics.setColor(1, 1, 1, 1)
             love.graphics.printf(label, x, y + h / 2 - 8, w, "center")

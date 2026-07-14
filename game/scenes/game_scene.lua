@@ -70,20 +70,10 @@ function GameScene:on_enter()
     self.drawer:add(self.background, -1)
 
     self.floor = {
-        draw = function()
-            local cols = WORLD_W / C.SLOT
-            local rows = WORLD_H / C.SLOT
-            for row = 0, rows - 1 do
-                for col = 0, cols - 1 do
-                    if (row + col) % 2 == 0 then
-                        love.graphics.setColor(0.55, 0.55, 0.55, 1)
-                    else
-                        love.graphics.setColor(0.45, 0.45, 0.45, 1)
-                    end
-                    love.graphics.rectangle("fill", col * C.SLOT, row * C.SLOT, C.SLOT, C.SLOT)
-                end
-            end
+        image = love.graphics.newImage("assets/backgrounds/floor.png"),
+        draw = function(self)
             love.graphics.setColor(1, 1, 1, 1)
+            love.graphics.draw(self.image, 0, 0)
         end,
     }
     self.drawer:add(self.floor, 0)

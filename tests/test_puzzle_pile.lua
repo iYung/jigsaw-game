@@ -174,6 +174,27 @@ do
     print("PASS: puzzle_pile: top_position() at count()==0 returns the same position as count()==1 (math.max(n, 1) floor)")
 end
 
+-- PuzzlePile:draw() ------------------------------------------------------------
+
+-- Smoke test, mirroring tests/test_settings_scene.lua's Test 25: :draw()
+-- must not error under the headless love.graphics stub now that it calls
+-- love.graphics.draw with an Image (PILE_BOX, loaded via love.graphics.newImage)
+-- instead of only love.graphics.rectangle. Uses a fresh GameState:reset() so
+-- count() is non-zero (the full real catalog size), exercising the loop body
+-- in :draw() rather than just the n==0 (no-op loop) case.
+
+do
+    GameState:reset()
+    local pile = PuzzlePile.new(0, 0)
+    assert(pile:count() > 0,
+        "test setup: pile:count() should be > 0 after a fresh GameState:reset() so :draw()'s loop body actually runs, got " ..
+        tostring(pile:count()))
+
+    local ok, err = pcall(function() pile:draw() end)
+    assert(ok, "PuzzlePile:draw() should not error with a non-zero pile count, got: " .. tostring(err))
+    print("PASS: puzzle_pile: :draw() does not error with a non-zero pile count (image-backed stack)")
+end
+
 -- PuzzlePile:interact() --------------------------------------------------------
 
 -- interact() invokes on_press exactly once per call, mirroring the old

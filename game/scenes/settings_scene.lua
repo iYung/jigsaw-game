@@ -38,6 +38,7 @@ local ITEMS_TOP = 220
 
 local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
 local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
+local SOLID          = love.graphics.newImage("assets/ui/solid.png")
 
 local OPAQUE_BG_COLOR = { 0.08, 0.08, 0.08, 1 }
 
@@ -293,14 +294,14 @@ function SettingsScene:draw()
         -- settings_pattern_*.png assets), fully hiding the Start Scene
         -- beneath it.
         love.graphics.setColor(OPAQUE_BG_COLOR)
-        love.graphics.rectangle("fill", 0, 0, LOGICAL_W, LOGICAL_H)
+        love.graphics.draw(SOLID, 0, 0, 0, LOGICAL_W / SOLID:getWidth(), LOGICAL_H / SOLID:getHeight())
     else
         -- Overlay mode: the live SceneManager.current has already been
         -- drawn by main.lua before this :draw() call runs -- this
         -- semi-transparent scrim sits on top of that frozen game world,
         -- exactly matching /root/wip/main.lua's settings_menu layering.
         love.graphics.setColor(0, 0, 0, 0.55)
-        love.graphics.rectangle("fill", 0, 0, LOGICAL_W, LOGICAL_H)
+        love.graphics.draw(SOLID, 0, 0, 0, LOGICAL_W / SOLID:getWidth(), LOGICAL_H / SOLID:getHeight())
     end
 
     love.graphics.setColor(1, 1, 1, 1)

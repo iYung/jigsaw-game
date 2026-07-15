@@ -203,6 +203,7 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
     if self.input:pressed("rotate_piece") then
         if self.held_piece ~= nil then
             self.held_piece:rotate()
+            Sound.play("rotate")
         end
     end
 

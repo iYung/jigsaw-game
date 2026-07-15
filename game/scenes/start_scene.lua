@@ -14,7 +14,10 @@ local LOGICAL_W, LOGICAL_H = 1280, 720
 local ITEM_W = 300
 local ITEM_H = 60
 local ITEM_GAP = 20
-local ITEMS_TOP = 340
+-- Leaves a 40px gap between the last menu item and the bottom edge of the
+-- 720px logical canvas (previously the last item's bottom touched y=720
+-- exactly, with no padding).
+local ITEMS_TOP = 300
 
 local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
 local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")

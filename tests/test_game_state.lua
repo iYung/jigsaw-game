@@ -157,6 +157,37 @@ do
     print("PASS: game_state: is_tier_unlocked('hard') is false until 3 'med' puzzles are solved, then true")
 end
 
+-- is_tier_unlocked("final_puzzle") requires full exhaustion of easy/med/hard,
+-- not a solve-count threshold -- unlike "med"/"hard", it stays locked even
+-- once every puzzle in every prior tier has been *solved*, as long as any
+-- path in any of those tiers hasn't yet been marked *seen* ---------------
+
+do
+    GameState:reset()
+    local by_tier = {
+        easy = {"assets/puzzles/easy/1.png", "assets/puzzles/easy/2.png"},
+        med  = {"assets/puzzles/med/1.png"},
+        hard = {"assets/puzzles/hard/1.png"},
+    }
+
+    assert(GameState:is_tier_unlocked("final_puzzle", by_tier) == false,
+        "final_puzzle should be locked on a fresh reset() (nothing seen yet)")
+    assert(GameState:is_tier_unlocked("final_puzzle") == false,
+        "final_puzzle should be locked when called without a by_tier argument")
+
+    GameState:mark_seen("easy", "assets/puzzles/easy/1.png")
+    GameState:mark_seen("easy", "assets/puzzles/easy/2.png")
+    GameState:mark_seen("med", "assets/puzzles/med/1.png")
+    assert(GameState:is_tier_unlocked("final_puzzle", by_tier) == false,
+        "final_puzzle should stay locked while 'hard' still has an unseen path")
+
+    GameState:mark_seen("hard", "assets/puzzles/hard/1.png")
+    assert(GameState:is_tier_unlocked("final_puzzle", by_tier) == true,
+        "final_puzzle should unlock once every easy/med/hard path has been marked seen")
+
+    print("PASS: game_state: is_tier_unlocked('final_puzzle') requires every easy/med/hard path to be seen, not a solve-count threshold")
+end
+
 -- puzzle_solved(tier) only increments that tier's counter --------------------
 
 do
@@ -390,6 +421,32 @@ do
     assert(GameState.player_count == 1,
         "apply_save() should default player_count to 1 when the save data omits it, got " .. tostring(GameState.player_count))
     print("PASS: game_state: apply_save(data) defaults player_count to 1 for a version-1 save missing that field")
+end
+
+-- apply_save(data) defaults final_puzzle's seen/solved_by_tier entries when --
+-- the save predates the final_puzzle tier -------------------------------------
+
+do
+    GameState:reset()
+    GameState.seen.final_puzzle = {["should-not-survive.png"] = true}
+    GameState.solved_by_tier.final_puzzle = 9
+    local data = {
+        version = 1,
+        seen = {easy = {}, med = {}, hard = {}},
+        solved_count = 0,
+        active_count = 0,
+        solved_by_tier = {easy = 0, med = 0, hard = 0},
+        -- final_puzzle intentionally omitted from both seen and
+        -- solved_by_tier: simulates a save written before this tier existed.
+    }
+
+    GameState:apply_save(data)
+    assert(type(GameState.seen.final_puzzle) == "table" and next(GameState.seen.final_puzzle) == nil,
+        "apply_save() should default seen.final_puzzle to an empty table when the save data omits it")
+    assert(GameState.solved_by_tier.final_puzzle == 0,
+        "apply_save() should default solved_by_tier.final_puzzle to 0 when the save data omits it, got " ..
+        tostring(GameState.solved_by_tier.final_puzzle))
+    print("PASS: game_state: apply_save(data) defaults final_puzzle's seen/solved_by_tier for a save that predates the tier")
 end
 
 -- reset() restores player_count to 1 after it was changed ---------------------

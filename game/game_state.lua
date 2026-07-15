@@ -15,10 +15,10 @@ GameState.UNLOCK_THRESHOLD = 3
 
 function GameState.new()
     local self = setmetatable({}, GameState)
-    self.seen = {easy = {}, med = {}, hard = {}}
+    self.seen = {easy = {}, med = {}, hard = {}, final_puzzle = {}}
     self.solved_count = 0
     self.active_count = 0
-    self.solved_by_tier = {easy = 0, med = 0, hard = 0}
+    self.solved_by_tier = {easy = 0, med = 0, hard = 0, final_puzzle = 0}
     self.player_count = 1
     return self
 end
@@ -91,13 +91,26 @@ end
 -- Returns true iff `tier`'s puzzles are available for selection. "easy" is
 -- always unlocked; "med" unlocks once UNLOCK_THRESHOLD "easy" puzzles have
 -- been solved; "hard" unlocks once UNLOCK_THRESHOLD "med" puzzles have.
-function GameState:is_tier_unlocked(tier)
+-- "final_puzzle" uses a different rule entirely: full exhaustion (every
+-- path already seen, i.e. already drawn out of the pile) of easy, med, and
+-- hard, rather than a solve-count threshold. A threshold here couldn't
+-- guarantee the final puzzle is literally the last one drawn -- thresholds
+-- let tiers overlap (e.g. "hard" can unlock while "med" still has unseen
+-- puzzles), whereas exhaustion guarantees nothing else is left in the pool.
+-- `by_tier` (shaped like PuzzleCatalog.list_by_tier()) is only consulted for
+-- the "final_puzzle" branch; the other branches ignore it.
+function GameState:is_tier_unlocked(tier, by_tier)
     if tier == "easy" then
         return true
     elseif tier == "med" then
         return self.solved_by_tier.easy >= GameState.UNLOCK_THRESHOLD
     elseif tier == "hard" then
         return self.solved_by_tier.med >= GameState.UNLOCK_THRESHOLD
+    elseif tier == "final_puzzle" then
+        return by_tier ~= nil
+            and self:is_tier_exhausted("easy", by_tier.easy)
+            and self:is_tier_exhausted("med", by_tier.med)
+            and self:is_tier_exhausted("hard", by_tier.hard)
     end
 end
 
@@ -105,10 +118,10 @@ end
 -- this; it exists purely so tests can isolate scenarios that would
 -- otherwise share this process-lifetime instance.
 function GameState:reset()
-    self.seen = {easy = {}, med = {}, hard = {}}
+    self.seen = {easy = {}, med = {}, hard = {}, final_puzzle = {}}
     self.solved_count = 0
     self.active_count = 0
-    self.solved_by_tier = {easy = 0, med = 0, hard = 0}
+    self.solved_by_tier = {easy = 0, med = 0, hard = 0, final_puzzle = 0}
     self.player_count = 1
 end
 
@@ -143,8 +156,11 @@ function GameState:apply_save(data)
     self.solved_count = data.solved_count
     self.active_count = data.active_count
     self.solved_by_tier = data.solved_by_tier
-    -- player_count postdates earlier saves; default rather than leave nil.
+    -- player_count and final_puzzle (seen/solved_by_tier) both postdate
+    -- earlier saves; default rather than leave nil.
     self.player_count = data.player_count or 1
+    self.seen.final_puzzle = self.seen.final_puzzle or {}
+    self.solved_by_tier.final_puzzle = self.solved_by_tier.final_puzzle or 0
 end
 
 -- Module returns a singleton instance (not the class table) so existing

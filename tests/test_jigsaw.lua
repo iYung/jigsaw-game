@@ -1181,6 +1181,57 @@ do
     print("PASS: jigsaw_box: grid inference for a hard/ (320x320) image yields cols=5, rows=5, piece_count=25")
 end
 
+-- final_puzzle: only selectable once every easy/med/hard path has been -------
+-- marked seen (full exhaustion, not a solve-count threshold) -- draws the
+-- 448x448 image and infers a 7x7 grid -----------------------------------
+
+do
+    GameState:reset()
+    local by_tier = PuzzleCatalog.list_by_tier()
+
+    -- Before exhaustion: final_puzzle must not be selectable, even with
+    -- med/hard unlocked and every OTHER tier's paths fully seen -- only
+    -- hard's last path is left unseen.
+    for _, path in ipairs(by_tier.easy) do GameState:mark_seen("easy", path) end
+    for _, path in ipairs(by_tier.med) do GameState:mark_seen("med", path) end
+    for i, path in ipairs(by_tier.hard) do
+        if i < #by_tier.hard then GameState:mark_seen("hard", path) end
+    end
+    assert(GameState:is_tier_unlocked("final_puzzle", by_tier) == false,
+        "final_puzzle should stay locked while 'hard' still has one unseen path")
+
+    -- Mark the remaining hard path seen: easy/med/hard are now fully
+    -- exhausted, so final_puzzle unlocks and is the only path left in the
+    -- pool.
+    for _, path in ipairs(by_tier.hard) do GameState:mark_seen("hard", path) end
+
+    local real_newImage = love.graphics.newImage
+    local last_path = nil
+    love.graphics.newImage = function(path, ...)
+        last_path = path
+        return real_newImage(path, ...)
+    end
+
+    local box = JigsawBox.new(0, 0)
+
+    love.graphics.newImage = real_newImage
+
+    assert(box ~= nil, "JigsawBox.new() should still produce a box once final_puzzle is the only unseen tier")
+    assert(box.tier == "final_puzzle",
+        "with easy/med/hard fully exhausted, box.tier should be 'final_puzzle', got " .. tostring(box.tier))
+    assert(last_path:find("/final_puzzle/", 1, true),
+        "expected the loaded image path to be under assets/puzzles/final_puzzle/, got " .. tostring(last_path))
+    assert(box.cols == 7, "box.cols should be inferred as 7 for a 448px-wide final_puzzle image, got " .. tostring(box.cols))
+    assert(box.rows == 7, "box.rows should be inferred as 7 for a 448px-tall final_puzzle image, got " .. tostring(box.rows))
+    assert(box.piece_count == 49, "box.piece_count should be rows*cols == 49, got " .. tostring(box.piece_count))
+
+    -- Pool is now fully drained (every tier, including final_puzzle, is
+    -- exhausted): this really was the last possible puzzle.
+    assert(JigsawBox.new(0, 0) == nil,
+        "JigsawBox.new() should return nil once final_puzzle has also been drawn -- no puzzles left at all")
+    print("PASS: jigsaw_box: final_puzzle only unlocks once easy/med/hard are fully exhausted, then yields a 7x7/49-piece box, and is the true last draw")
+end
+
 -- Drawer:remove ------------------------------------------------------------
 
 do

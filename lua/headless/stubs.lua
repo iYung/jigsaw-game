@@ -10,8 +10,9 @@ local noop = function() end
 -- rows/cols under headless tests just like it does with the real images.
 -- Path-aware: love.graphics.newImage(path) forwards `path` here via the
 -- catch-all __index below, so the reported size varies by tier folder
--- (/med/ -> 256x256, /hard/ -> 320x320). Any other call (e.g. newQuad, or
--- newImage with no/other path) falls through to the 192x192 default.
+-- (/med/ -> 256x256, /hard/ -> 320x320, /final_puzzle/ -> 448x448). Any
+-- other call (e.g. newQuad, or newImage with no/other path) falls through
+-- to the 192x192 default.
 local function make_stub_image(path)
   local width, height = 192, 192
   if type(path) == "string" then
@@ -19,6 +20,8 @@ local function make_stub_image(path)
       width, height = 256, 256
     elseif path:find("/hard/", 1, true) then
       width, height = 320, 320
+    elseif path:find("/final_puzzle/", 1, true) then
+      width, height = 448, 448
     end
   end
   return {

@@ -14,10 +14,14 @@ local LOGICAL_W, LOGICAL_H = 1280, 720
 local ITEM_W = 300
 local ITEM_H = 60
 local ITEM_GAP = 20
-local ITEMS_TOP = 340
+-- Leaves a 40px gap between the last menu item and the bottom edge of the
+-- 720px logical canvas (previously the last item's bottom touched y=720
+-- exactly, with no padding).
+local ITEMS_TOP = 300
 
 local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
 local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
+local BACKGROUND     = love.graphics.newImage("assets/backgrounds/start_bg.png")
 
 function StartScene.new(manager, on_settings)
     local self = Scene.new(LOGICAL_W, LOGICAL_H)
@@ -180,6 +184,9 @@ function StartScene:update(dt)
 end
 
 function StartScene:draw()
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(BACKGROUND, 0, 0)
+
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Jigsaw", 0, 160, LOGICAL_W, "center")
 

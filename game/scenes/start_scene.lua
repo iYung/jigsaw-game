@@ -18,6 +18,7 @@ local ITEMS_TOP = 340
 
 local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
 local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
+local BACKGROUND     = love.graphics.newImage("assets/backgrounds/start_bg.png")
 
 function StartScene.new(manager, on_settings)
     local self = Scene.new(LOGICAL_W, LOGICAL_H)
@@ -180,6 +181,9 @@ function StartScene:update(dt)
 end
 
 function StartScene:draw()
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(BACKGROUND, 0, 0)
+
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Jigsaw", 0, 160, LOGICAL_W, "center")
 

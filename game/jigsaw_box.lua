@@ -11,7 +11,7 @@ function JigsawBox.new(x, y, world_w, world_h, spawn_from)
     local by_tier = PuzzleCatalog.list_by_tier()
     local pool = {}
     for tier, paths in pairs(by_tier) do
-        if GameState:is_tier_unlocked(tier) then
+        if GameState:is_tier_unlocked(tier, by_tier) then
             local unseen = GameState:unseen_paths(tier, paths)
             for _, path in ipairs(unseen) do
                 pool[#pool + 1] = {path = path, tier = tier}

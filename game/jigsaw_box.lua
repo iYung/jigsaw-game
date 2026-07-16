@@ -1,5 +1,6 @@
 local Sprite = require("lua/core/sprite")
 local JigsawPiece = require("game/jigsaw_piece")
+local Sound = require("lua/core/sound")
 local C = require("game/constants")
 local PuzzleCatalog = require("game/puzzle_catalog")
 local GameState = require("game/game_state")
@@ -162,6 +163,7 @@ function JigsawBox:_eject_next(pieces)
 
     pieces[#pieces + 1] = piece
     self.spawned[#self.spawned + 1] = piece
+    Sound.play("poof")
 
     if #self.pieces_to_spawn == 0 then
         self.state = "done"

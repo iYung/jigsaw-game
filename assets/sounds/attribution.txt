@@ -8,3 +8,4 @@ background2 is hillacious hiltops by thrash kid
 background3 is sassy shells by thrash kid
 background4 is nocturnal knoll by thrash kid
 rotate.wav is a temporary placeholder, copied from menu_navigate.wav, pending a real sourced sound
+poof.wav is a temporary placeholder, copied from menu_navigate.wav, pending a real sourced sound

@@ -518,6 +518,65 @@ do
     print("PASS: jigsaw_box: update() with dt exceeding BOX_FLY_DURATION snaps sprite exactly to target (no overshoot) and flips state to 'waiting'")
 end
 
+-- landing (flying -> waiting) plays the "put_down" sound --------------------
+-- Spies on Sound.play by monkey-patching the shared lua/core/sound module
+-- singleton -- require() caches modules, so this is the same table
+-- jigsaw_box.lua's own `local Sound = require(...)` holds a reference to.
+-- Mirrors the spy-and-restore pattern used in test_player.lua for the
+-- "rotate" sound.
+
+do
+    local Sound = require("lua/core/sound")
+
+    local function with_sound_play_spy(fn)
+        local original = Sound.play
+        local played = {}
+        Sound.play = function(name) played[#played + 1] = name end
+        local ok, err = pcall(fn, played)
+        Sound.play = original
+        if not ok then
+            error(err, 0)
+        end
+    end
+
+    local function played_contains(played, name)
+        for _, n in ipairs(played) do
+            if n == name then return true end
+        end
+        return false
+    end
+
+    with_sound_play_spy(function(played)
+        GameState:reset()
+        local box = new_easy_box(400, 300, 2000, 2000, {x = 0, y = 0})
+        local pieces = {}
+        box:update(C.BOX_FLY_DURATION + 1.0, pieces)
+        assert(played_contains(played, "put_down"),
+            "jigsaw_box: update() landing (flying -> waiting) should call Sound.play('put_down')")
+    end)
+    print("PASS: jigsaw_box: update() landing (flying -> waiting) plays the 'put_down' sound")
+
+    with_sound_play_spy(function(played)
+        GameState:reset()
+        local box = new_easy_box(400, 300, 2000, 2000, {x = 0, y = 0})
+        local pieces = {}
+        local step = C.BOX_FLY_DURATION / 2
+        box:update(step, pieces)
+        assert(not played_contains(played, "put_down"),
+            "jigsaw_box: update() mid-flight (still 'flying') should not call Sound.play('put_down') yet")
+    end)
+    print("PASS: jigsaw_box: update() mid-flight does not play 'put_down' before landing")
+
+    with_sound_play_spy(function(played)
+        GameState:reset()
+        local box = new_easy_box(400, 300, 2000, 2000)
+        assert(box.state == "waiting", "box constructed without spawn_from should start in 'waiting'")
+        assert(not played_contains(played, "put_down"),
+            "jigsaw_box: a box constructed without spawn_from (e.g. the initial on_enter box) should stay silent -- it never visually lands")
+    end)
+    print("PASS: jigsaw_box: a box constructed without spawn_from (never flies) does not play 'put_down'")
+end
+
 -- a flying box is not interactable ------------------------------------------
 -- player.lua gates box interaction on `b.state == "waiting"` (see
 -- game/player.lua); a box in "flying" state must fail that check, and

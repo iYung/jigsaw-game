@@ -1,5 +1,6 @@
 local Sprite = require("lua/core/sprite")
 local JigsawPiece = require("game/jigsaw_piece")
+local Sound = require("lua/core/sound")
 local C = require("game/constants")
 local PuzzleCatalog = require("game/puzzle_catalog")
 local GameState = require("game/game_state")
@@ -100,6 +101,7 @@ function JigsawBox:update(dt, pieces)
         if self.fly_timer <= 0 then
             self.sprite.x, self.sprite.y = self.target_x, self.target_y
             self.state = "waiting"
+            Sound.play("put_down")
         end
         return
     end

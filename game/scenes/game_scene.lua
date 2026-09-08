@@ -379,6 +379,8 @@ function GameScene:update(dt)
     end
 
     if self.view1 == "wall" then
+        local t = self:_compute_wall_target()
+        if t then self.wall_target1 = t end
         self.camera:follow(self.wall_target1, 0.85)
     else
         local c = self.player:centre()
@@ -386,6 +388,8 @@ function GameScene:update(dt)
     end
     if self.camera2 then
         if self.view2 == "wall" then
+            local t = self:_compute_wall_target()
+            if t then self.wall_target2 = t end
             self.camera2:follow(self.wall_target2, 0.85)
         else
             local c2 = self.player2:centre()
@@ -396,21 +400,10 @@ end
 
 -- Flips the given player's ("p1"/"p2") view between "play" and "wall".
 -- Entering "wall" computes a target camera center/zoom that fits the full
--- bounding box of self.completed_puzzles on screen (see
--- docs/design/wall-view-tile.md); a no-op if nothing has been shelved yet,
--- since there's no bounding box to fit.
-function GameScene:_toggle_wall_view(which)
-    local view_key = (which == "p2") and "view2" or "view1"
-    local target_key = (which == "p2") and "wall_target2" or "wall_target1"
-
-    if self[view_key] == "wall" then
-        self[view_key] = "play"
-        return
-    end
-
-    if #self.completed_puzzles == 0 then
-        return
-    end
+-- Returns a camera target {x, y, zoom} that frames the full bounding box of
+-- self.completed_puzzles, or nil when the shelf is empty.
+function GameScene:_compute_wall_target()
+    if #self.completed_puzzles == 0 then return nil end
 
     local min_x, min_y = math.huge, math.huge
     local max_x, max_y = -math.huge, -math.huge
@@ -426,12 +419,31 @@ function GameScene:_toggle_wall_view(which)
     local bbox_w = max_x - min_x
     local bbox_h = max_y - min_y
     local zoom = math.min(1.0, 0.9 * math.min(LOGICAL_W / bbox_w, LOGICAL_H / bbox_h))
-
-    self[target_key] = {
+    return {
         x = (min_x + max_x) / 2,
         y = (min_y + max_y) / 2,
         zoom = zoom,
     }
+end
+
+-- Flips the given player's ("p1"/"p2") view between "play" and "wall".
+-- Entering "wall" sets an initial camera target from the current shelf
+-- bounding box (see docs/design/wall-view-tile.md); a no-op if the shelf is
+-- empty. The target is then kept fresh every frame by update() so newly
+-- shelved puzzles are automatically included.
+function GameScene:_toggle_wall_view(which)
+    local view_key = (which == "p2") and "view2" or "view1"
+    local target_key = (which == "p2") and "wall_target2" or "wall_target1"
+
+    if self[view_key] == "wall" then
+        self[view_key] = "play"
+        return
+    end
+
+    local t = self:_compute_wall_target()
+    if not t then return end
+
+    self[target_key] = t
     self[view_key] = "wall"
 end
 

@@ -16,6 +16,7 @@ function SpriteSet.new()
     self.scale_x  = 1
     self.scale_y  = 1
     self.visible  = true
+    self.color    = {1, 1, 1, 1}
     return self
 end
 
@@ -42,6 +43,7 @@ function SpriteSet:draw()
     s.y       = self.y
     s.scale_x = self.scale_x
     s.scale_y = self.scale_y
+    s.color   = self.color
     s:draw()
 end
 

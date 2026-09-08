@@ -180,4 +180,30 @@ with_key_down("r", function()
 end)
 print("PASS: Player:update() does not play 'rotate' sound when rotate_piece is pressed with no piece held")
 
+-- Test 5: Walk animation — idle when still, cycles when moving.
+-- Player starts with _anim_frame == "idle". Holding a direction key and
+-- ticking past the 0.15s threshold should flip to "walk"; releasing should
+-- snap back to "idle" on the very next update().
+with_key_down("d", function()
+    local player = Player.new(0, 0)
+    assert(player._anim_frame == "idle", "player starts in idle frame")
+    -- Tick past the 0.15s animation threshold (use 0.2s to be safe)
+    player:update(0.2)
+    assert(player._anim_frame == "walk",
+        "Player:update(): holding right with dt > 0.15 should advance to walk frame")
+end)
+print("PASS: Player:update() advances to walk frame after timer threshold while moving")
+
+-- No key held: frame snaps back to idle immediately regardless of timer state
+do
+    local player = Player.new(0, 0)
+    -- Force frame to walk to make the snap visible
+    player._anim_frame = "walk"
+    player.sprite:set("walk")
+    player:update(0.2)
+    assert(player._anim_frame == "idle",
+        "Player:update(): no key held should snap _anim_frame back to idle")
+end
+print("PASS: Player:update() snaps back to idle frame when no direction is held")
+
 print("ALL TESTS PASSED")

@@ -1,7 +1,9 @@
-local Sprite = require("lua/core/sprite")
-local Input  = require("lua/core/input")
-local Sound  = require("lua/core/sound")
-local C      = require("game/constants")
+local Sprite    = require("lua/core/sprite")
+local SpriteSet = require("lua/core/spriteset")
+local Timer     = require("lua/core/timer")
+local Input     = require("lua/core/input")
+local Sound     = require("lua/core/sound")
+local C         = require("game/constants")
 
 local SPEED = 200
 
@@ -67,9 +69,22 @@ end
 
 function Player.new(x, y, input)
     local self        = setmetatable({}, Player)
-    self.sprite       = Sprite.new(x, y, C.SLOT, C.SLOT)
-    self.sprite.image = love.graphics.newImage("assets/player.png")
-    self.input        = input or Player.build_input()
+    local idle = Sprite.new(0, 0, C.SLOT, C.SLOT)
+    idle.image = love.graphics.newImage("assets/player_idle.png")
+    local walk = Sprite.new(0, 0, C.SLOT, C.SLOT)
+    walk.image = love.graphics.newImage("assets/player_walk.png")
+
+    self.sprite = SpriteSet.new()
+    self.sprite:add("idle", idle)
+    self.sprite:add("walk", walk)
+    self.sprite:set("idle")
+    self.sprite.x = x
+    self.sprite.y = y
+
+    self._anim_timer = Timer.new(0.15)
+    self._anim_frame = "idle"
+
+    self.input      = input or Player.build_input()
     self.held_piece = nil
     return self
 end
@@ -103,6 +118,18 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
     if self.input:is_down("right") then s.x = s.x + SPEED * dt end
     if self.input:is_down("up")    then s.y = s.y - SPEED * dt end
     if self.input:is_down("down")  then s.y = s.y + SPEED * dt end
+
+    local moving = self.input:is_down("left") or self.input:is_down("right")
+                   or self.input:is_down("up") or self.input:is_down("down")
+    if moving then
+        if self._anim_timer:update(dt) then
+            self._anim_frame = (self._anim_frame == "idle") and "walk" or "idle"
+            self.sprite:set(self._anim_frame)
+        end
+    else
+        self._anim_frame = "idle"
+        self.sprite:set("idle")
+    end
 
     if self.input:pressed("interact") then
         if self.held_piece ~= nil then

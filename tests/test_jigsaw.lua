@@ -651,6 +651,27 @@ do
     print("PASS: jigsaw_box: _eject_next keeps ejected pieces within world bounds near an edge")
 end
 
+-- _eject_next never places a piece on the wall-view tile's reserved cell ---
+
+do
+    GameState:reset()
+    local world_w, world_h = 20 * C.SLOT, 10 * C.SLOT
+    -- Place the box one row below the wall tile so (world_w - C.SLOT, 0) is
+    -- the nearest candidate at d=1 and would be picked without the fix.
+    local box = new_easy_box(world_w - C.SLOT, C.SLOT, world_w, world_h)
+    local pieces = {}
+    box:interact()
+    for i = 1, 9 do
+        box:update(1.0, pieces)
+    end
+    for i, p in ipairs(pieces) do
+        assert(not (p.sprite.x == world_w - C.SLOT and p.sprite.y == 0),
+            "piece " .. i .. " must not land on the wall tile's reserved cell (" ..
+            (world_w - C.SLOT) .. ", 0)")
+    end
+    print("PASS: jigsaw_box: _eject_next never places a piece on the wall-view tile's reserved cell")
+end
+
 -- pieces_to_spawn slices the image into 9 distinct cells (shuffle) --------
 
 do

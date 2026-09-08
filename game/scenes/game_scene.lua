@@ -333,14 +333,16 @@ function GameScene:update(dt)
             Sound.play("puzzle_complete")
             GameState:puzzle_solved(entry.tier)
             for _, piece in ipairs(entry.pieces) do
-                piece:start_vanish()
+                piece:start_celebrate()
             end
         end
     end
 
     for i = #self.pieces, 1, -1 do
         local piece = self.pieces[i]
-        if piece.state == "vanishing" then
+        if piece.state == "celebrating" then
+            piece:update_celebrate(dt)
+        elseif piece.state == "vanishing" then
             local finished = piece:update_fade(dt)
             if finished then
                 table.remove(self.pieces, i)

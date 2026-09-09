@@ -45,20 +45,7 @@ end
 
 function JigsawPiece:update_celebrate(dt)
     self.celebrate_timer = self.celebrate_timer - dt
-    local progress = 1 - math.max(0, self.celebrate_timer / C.PIECE_CELEBRATE_DURATION)
-    local scale
-    if progress < 0.4 then
-        scale = 1.0 + 0.3 * (progress / 0.4)
-    elseif progress < 0.7 then
-        scale = 1.3 - 0.35 * ((progress - 0.4) / 0.3)
-    else
-        scale = 0.95 + 0.05 * ((progress - 0.7) / 0.3)
-    end
-    self.sprite.scale_x = scale
-    self.sprite.scale_y = scale
     if self.celebrate_timer <= 0 then
-        self.sprite.scale_x = 1
-        self.sprite.scale_y = 1
         self:start_vanish()
         return true
     end
@@ -89,6 +76,18 @@ end
 
 function JigsawPiece:draw()
     self.sprite:draw()
+    if self.state == "celebrating" then
+        local t = self.celebrate_timer / C.PIECE_CELEBRATE_DURATION
+        local shine_alpha = t * 0.65
+        if shine_alpha > 0 then
+            love.graphics.setBlendMode("add")
+            love.graphics.setColor(1, 1, 1, shine_alpha)
+            love.graphics.rectangle("fill", self.sprite.x, self.sprite.y,
+                self.sprite.width, self.sprite.height)
+            love.graphics.setBlendMode("alpha")
+            love.graphics.setColor(1, 1, 1, 1)
+        end
+    end
 end
 
 function JigsawPiece:draw_ghost(x, y, alpha)

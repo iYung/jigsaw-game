@@ -1662,9 +1662,7 @@ do
     local done = p:update_celebrate(C.PIECE_CELEBRATE_DURATION / 2)
     assert(not done, "update_celebrate() should return false while time remains")
     assert(p.state == "celebrating", "state should still be 'celebrating' mid-animation")
-    assert(p.sprite.scale_x ~= 1 or p.sprite.scale_y ~= 1,
-        "scale should be non-unity at mid-animation")
-    print("PASS: jigsaw_piece: update_celebrate() returns false and animates scale while time remains")
+    print("PASS: jigsaw_piece: update_celebrate() returns false while time remains")
 end
 
 do
@@ -1673,9 +1671,7 @@ do
     local done = p:update_celebrate(C.PIECE_CELEBRATE_DURATION + 0.1)
     assert(done, "update_celebrate() should return true once the timer expires")
     assert(p.state == "vanishing", "state should be 'vanishing' once celebration ends")
-    assert(p.sprite.scale_x == 1, "scale_x should be reset to 1 after celebration")
-    assert(p.sprite.scale_y == 1, "scale_y should be reset to 1 after celebration")
-    print("PASS: jigsaw_piece: update_celebrate() resets scale and transitions to 'vanishing' when done")
+    print("PASS: jigsaw_piece: update_celebrate() transitions to 'vanishing' when done")
 end
 
 -- start_vanish() ------------------------------------------------------------

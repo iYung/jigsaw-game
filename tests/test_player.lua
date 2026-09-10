@@ -180,4 +180,102 @@ with_key_down("r", function()
 end)
 print("PASS: Player:update() does not play 'rotate' sound when rotate_piece is pressed with no piece held")
 
+-- Facing direction and animation state tests
+
+-- Helper: simulate a player update with a key held for one frame.
+local function update_with_key(player, key)
+    local original = love.keyboard.isDown
+    love.keyboard.isDown = function(k) return k == key end
+    player.input:update()
+    player:update(0.016)
+    love.keyboard.isDown = original
+end
+
+-- Helper: simulate a player update with no keys held.
+local function update_idle(player)
+    local original = love.keyboard.isDown
+    love.keyboard.isDown = function(_) return false end
+    player.input:update()
+    player:update(0.016)
+    love.keyboard.isDown = original
+end
+
+-- Test: facing defaults to "right" on a freshly constructed player.
+do
+    local player = Player.new(0, 0)
+    assert(player.facing == "right", "facing should default to 'right'")
+end
+print("PASS: facing defaults to 'right'")
+
+-- Test: pressing left sets facing to "left".
+do
+    local player = Player.new(0, 0)
+    update_with_key(player, "a")
+    assert(player.facing == "left", "facing should be 'left' after pressing left")
+end
+print("PASS: facing is 'left' after pressing left")
+
+-- Test: pressing right sets facing to "right".
+do
+    local player = Player.new(0, 0)
+    update_with_key(player, "a")  -- go left first
+    update_with_key(player, "d")  -- then right
+    assert(player.facing == "right", "facing should flip back to 'right' after pressing right")
+end
+print("PASS: facing flips back to 'right' after pressing right")
+
+-- Test: facing stays "left" after the left key is released (no input frame).
+do
+    local player = Player.new(0, 0)
+    update_with_key(player, "a")
+    update_idle(player)
+    assert(player.facing == "left", "facing should remain 'left' after releasing left key")
+end
+print("PASS: facing stays 'left' after releasing the left key")
+
+-- Test: pressing up or down does not change facing.
+do
+    local player = Player.new(0, 0)
+    update_with_key(player, "a")  -- set facing to left
+    update_with_key(player, "w")  -- press up
+    assert(player.facing == "left", "pressing up must not change facing")
+    update_with_key(player, "s")  -- press down
+    assert(player.facing == "left", "pressing down must not change facing")
+end
+print("PASS: up/down keys do not change facing")
+
+-- Test: is_moving is true while a directional key is held.
+do
+    local player = Player.new(0, 0)
+    update_with_key(player, "d")
+    assert(player.is_moving == true, "is_moving should be true while moving")
+end
+print("PASS: is_moving is true while a directional key is held")
+
+-- Test: is_moving is false when no keys are held.
+do
+    local player = Player.new(0, 0)
+    update_with_key(player, "d")
+    update_idle(player)
+    assert(player.is_moving == false, "is_moving should be false when no keys held")
+end
+print("PASS: is_moving is false when no keys are held")
+
+-- Test: sprite switches to sprite_walk while moving.
+do
+    local player = Player.new(0, 0)
+    update_with_key(player, "d")
+    assert(player.sprite == player.sprite_walk, "sprite should be sprite_walk while moving")
+end
+print("PASS: sprite is sprite_walk while moving")
+
+-- Test: sprite switches back to sprite_idle when stopped.
+do
+    local player = Player.new(0, 0)
+    update_with_key(player, "d")
+    update_idle(player)
+    assert(player.sprite == player.sprite_idle, "sprite should return to sprite_idle when stopped")
+end
+print("PASS: sprite returns to sprite_idle when stopped")
+
 print("ALL TESTS PASSED")

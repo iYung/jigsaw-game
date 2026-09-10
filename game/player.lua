@@ -1,7 +1,8 @@
-local Sprite = require("lua/core/sprite")
-local Input  = require("lua/core/input")
-local Sound  = require("lua/core/sound")
-local C      = require("game/constants")
+local Sprite        = require("lua/core/sprite")
+local AnimatedSprite = require("lua/core/anim_sprite")
+local Input         = require("lua/core/input")
+local Sound         = require("lua/core/sound")
+local C             = require("game/constants")
 
 local SPEED = 200
 
@@ -66,11 +67,18 @@ function Player.build_input(device)
 end
 
 function Player.new(x, y, input)
-    local self        = setmetatable({}, Player)
-    self.sprite       = Sprite.new(x, y, C.SLOT, C.SLOT)
-    self.sprite.image = love.graphics.newImage("assets/player.png")
-    self.input        = input or Player.build_input()
-    self.held_piece = nil
+    local self           = setmetatable({}, Player)
+    local idle           = Sprite.new(x, y, C.SLOT, C.SLOT)
+    idle.image           = love.graphics.newImage("assets/player.png")
+    local walk_img       = love.graphics.newImage("assets/player_walk.png")
+    local walk           = AnimatedSprite.new(x, y, C.SLOT, C.SLOT, walk_img, 4, 8)
+    self.sprite_idle     = idle
+    self.sprite_walk     = walk
+    self.sprite          = idle
+    self.facing          = "right"
+    self.is_moving       = false
+    self.input           = input or Player.build_input()
+    self.held_piece      = nil
     return self
 end
 
@@ -99,10 +107,28 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
         return
     end
     local s = self.sprite
-    if self.input:is_down("left")  then s.x = s.x - SPEED * dt end
-    if self.input:is_down("right") then s.x = s.x + SPEED * dt end
-    if self.input:is_down("up")    then s.y = s.y - SPEED * dt end
-    if self.input:is_down("down")  then s.y = s.y + SPEED * dt end
+    local moving = false
+    if self.input:is_down("left") then
+        s.x = s.x - SPEED * dt
+        self.facing = "left"
+        moving = true
+    end
+    if self.input:is_down("right") then
+        s.x = s.x + SPEED * dt
+        self.facing = "right"
+        moving = true
+    end
+    if self.input:is_down("up")   then s.y = s.y - SPEED * dt; moving = true end
+    if self.input:is_down("down") then s.y = s.y + SPEED * dt; moving = true end
+
+    local prev = self.sprite
+    self.is_moving = moving
+    self.sprite = moving and self.sprite_walk or self.sprite_idle
+    if self.sprite ~= prev then
+        self.sprite.x = prev.x
+        self.sprite.y = prev.y
+    end
+    if moving then self.sprite_walk:update(dt) end
 
     if self.input:pressed("interact") then
         if self.held_piece ~= nil then
@@ -237,6 +263,7 @@ function Player:draw()
         love.graphics.rectangle("fill", drop_target.snap_x, drop_target.snap_y, C.SLOT, C.SLOT)
         love.graphics.setColor(1, 1, 1, 1)
     end
+    self.sprite.scale_x = (self.facing == "left") and -1 or 1
     self.sprite:draw()
     if self.held_piece ~= nil then
         self.held_piece:draw()

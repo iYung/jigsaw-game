@@ -240,6 +240,8 @@ function GameScene:on_enter()
     self.help_tile = HelpTile.new(0, WORLD_H - C.SLOT, function() self:_toggle_help() end)
     self.drawer:add(self.help_tile, C.PRIORITY_PIECE)
     self.help_mode = false
+    self.help_overlay_drawable = { draw = function() if self.help_mode then self:_draw_help_overlay() end end }
+    self.drawer:add(self.help_overlay_drawable, 9)
 
     self.view1 = "play"
     self.wall_target1 = nil
@@ -510,22 +512,15 @@ end
 function GameScene:draw()
     if self.camera2 == nil then
         Scene.draw(self)
-        if self.help_mode then
-            self.camera:attach()
-            self:_draw_help_overlay()
-            self.camera:detach()
-        end
     else
         love.graphics.setScissor(0, 0, 640, 720)
         self.camera:attach()
         self.drawer:draw()
-        if self.help_mode then self:_draw_help_overlay() end
         self.camera:detach()
 
         love.graphics.setScissor(640, 0, 640, 720)
         self.camera2:attach()
         self.drawer:draw()
-        if self.help_mode then self:_draw_help_overlay() end
         self.camera2:detach()
 
         love.graphics.setScissor()

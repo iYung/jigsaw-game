@@ -124,4 +124,60 @@ with_key_down("e", function()
 end)
 print("PASS: build_input({type='gamepad', index=2}) ignores keyboard presses")
 
+-- Test 4: Player:update() plays the "rotate" sound (game/player.lua's
+-- rotate_piece handling) exactly when a piece is held, and never when one
+-- isn't. Spies on Sound.play by monkey-patching the shared lua/core/sound
+-- module singleton -- require() caches modules, so this is the same table
+-- player.lua's own `local Sound = require(...)` holds a reference to.
+-- Mirrors the spy-and-restore pattern used for love.* stubs elsewhere (e.g.
+-- with_joysticks above, love.graphics.newQuad spies in test_jigsaw.lua).
+local Sound = require("lua/core/sound")
+
+local function with_sound_play_spy(fn)
+    local original = Sound.play
+    local played = {}
+    Sound.play = function(name) played[#played + 1] = name end
+    local ok, err = pcall(fn, played)
+    Sound.play = original
+    if not ok then
+        error(err, 0)
+    end
+end
+
+local function fake_held_piece()
+    return {
+        rotate = function() end,
+        update = function() end,
+    }
+end
+
+local function played_contains(played, name)
+    for _, n in ipairs(played) do
+        if n == name then return true end
+    end
+    return false
+end
+
+with_key_down("r", function()
+    with_sound_play_spy(function(played)
+        local player = Player.new(0, 0)
+        player.held_piece = fake_held_piece()
+        player:update(0)
+        assert(played_contains(played, "rotate"),
+            "Player:update(): pressing rotate_piece while holding a piece should call Sound.play('rotate')")
+    end)
+end)
+print("PASS: Player:update() plays 'rotate' sound when rotate_piece is pressed while holding a piece")
+
+with_key_down("r", function()
+    with_sound_play_spy(function(played)
+        local player = Player.new(0, 0)
+        player.held_piece = nil
+        player:update(0)
+        assert(not played_contains(played, "rotate"),
+            "Player:update(): pressing rotate_piece with no piece held should not call Sound.play('rotate')")
+    end)
+end)
+print("PASS: Player:update() does not play 'rotate' sound when rotate_piece is pressed with no piece held")
+
 print("ALL TESTS PASSED")

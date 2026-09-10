@@ -1,5 +1,6 @@
 local Sprite = require("lua/core/sprite")
 local JigsawPiece = require("game/jigsaw_piece")
+local Sound = require("lua/core/sound")
 local C = require("game/constants")
 local PuzzleCatalog = require("game/puzzle_catalog")
 local GameState = require("game/game_state")
@@ -11,7 +12,7 @@ function JigsawBox.new(x, y, world_w, world_h, spawn_from)
     local by_tier = PuzzleCatalog.list_by_tier()
     local pool = {}
     for tier, paths in pairs(by_tier) do
-        if GameState:is_tier_unlocked(tier) then
+        if GameState:is_tier_unlocked(tier, by_tier) then
             local unseen = GameState:unseen_paths(tier, paths)
             for _, path in ipairs(unseen) do
                 pool[#pool + 1] = {path = path, tier = tier}
@@ -137,6 +138,7 @@ function JigsawBox:_eject_next(pieces)
             local tx = bx + pair[1] * C.SLOT
             local ty = by + pair[2] * C.SLOT
             local out_of_bounds = tx < 0 or tx >= self.world_w or ty < 0 or ty >= self.world_h
+            local is_reserved = (tx == self.world_w - C.SLOT and ty == 0)
             local occupied = false
             for _, p in ipairs(pieces) do
                 if p.state == "grounded" and p.sprite.x == tx and p.sprite.y == ty then
@@ -144,7 +146,7 @@ function JigsawBox:_eject_next(pieces)
                     break
                 end
             end
-            if not occupied and not out_of_bounds then
+            if not occupied and not out_of_bounds and not is_reserved then
                 cx, cy = tx, ty
                 break
             end
@@ -162,6 +164,7 @@ function JigsawBox:_eject_next(pieces)
 
     pieces[#pieces + 1] = piece
     self.spawned[#self.spawned + 1] = piece
+    Sound.play("poof")
 
     if #self.pieces_to_spawn == 0 then
         self.state = "done"

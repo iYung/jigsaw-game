@@ -1,6 +1,6 @@
 local PuzzleCatalog = {}
 
-local TIERS = {"easy", "med", "hard"}
+local TIERS = {"easy", "med", "hard", "final_puzzle"}
 
 local cached_list
 local cached_by_tier

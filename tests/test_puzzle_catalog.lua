@@ -1,6 +1,6 @@
 local PuzzleCatalog = require("game/puzzle_catalog")
 
-local TIER_NAMES = {"easy", "med", "hard"}
+local TIER_NAMES = {"easy", "med", "hard", "final_puzzle"}
 
 -- PuzzleCatalog.list() flattens all tiers into one array of path strings,
 -- filtering to .png entries, and memoizes the scan for the process lifetime.
@@ -25,6 +25,7 @@ do
         ["assets/puzzles/easy"] = {"1.png", "2.png", "3.png", ".DS_Store"},
         ["assets/puzzles/med"]  = {"1.png"},
         ["assets/puzzles/hard"] = {"1.png"},
+        ["assets/puzzles/final_puzzle"] = {"1.png"},
     }
 
     local call_count = 0
@@ -41,8 +42,8 @@ do
         -- Our mock was actually consulted (the cache was not already
         -- populated by an earlier test file's real scan), so we can make
         -- strong assertions about the exact returned list.
-        assert(#list == 5,
-            "expected 5 total paths from the mocked 3/1/1 tiers, got " .. #list)
+        assert(#list == 6,
+            "expected 6 total paths from the mocked 3/1/1/1 tiers, got " .. #list)
 
         local expected = {
             ["assets/puzzles/easy/1.png"] = true,
@@ -50,6 +51,7 @@ do
             ["assets/puzzles/easy/3.png"] = true,
             ["assets/puzzles/med/1.png"]  = true,
             ["assets/puzzles/hard/1.png"] = true,
+            ["assets/puzzles/final_puzzle/1.png"] = true,
         }
 
         local seen = {}
@@ -65,7 +67,7 @@ do
             assert(seen[path], "expected path " .. path .. " missing from PuzzleCatalog.list() result")
         end
 
-        print("PASS: puzzle_catalog: list() returns a flat 5-path list across easy/med/hard tiers, filtering out non-.png entries")
+        print("PASS: puzzle_catalog: list() returns a flat 6-path list across easy/med/hard/final_puzzle tiers, filtering out non-.png entries")
     else
         -- The module-level cache was already populated by an earlier test
         -- file's real scan before our mock was installed; our mock never
@@ -88,6 +90,7 @@ do
         ["assets/puzzles/easy"] = {"1.png", "2.png", "3.png"},
         ["assets/puzzles/med"]  = {"1.png"},
         ["assets/puzzles/hard"] = {"1.png"},
+        ["assets/puzzles/final_puzzle"] = {"1.png"},
     }
 
     local call_count = 0
@@ -123,6 +126,7 @@ do
         ["assets/puzzles/easy"] = {"1.png", "2.png", "3.png", ".DS_Store"},
         ["assets/puzzles/med"]  = {"1.png"},
         ["assets/puzzles/hard"] = {"1.png"},
+        ["assets/puzzles/final_puzzle"] = {"1.png"},
     }
 
     local call_count = 0
@@ -142,13 +146,15 @@ do
         local keys = {}
         for k in pairs(by_tier) do keys[#keys + 1] = k end
         table.sort(keys)
-        assert(#keys == 3 and keys[1] == "easy" and keys[2] == "hard" and keys[3] == "med",
-            "expected exactly the keys easy/hard/med, got: " .. table.concat(keys, ", "))
+        assert(#keys == 4 and keys[1] == "easy" and keys[2] == "final_puzzle"
+            and keys[3] == "hard" and keys[4] == "med",
+            "expected exactly the keys easy/final_puzzle/hard/med, got: " .. table.concat(keys, ", "))
 
         assert(#by_tier.easy == 3,
             "expected 3 easy paths (.DS_Store filtered out), got " .. #by_tier.easy)
         assert(#by_tier.med == 1, "expected 1 med path, got " .. #by_tier.med)
         assert(#by_tier.hard == 1, "expected 1 hard path, got " .. #by_tier.hard)
+        assert(#by_tier.final_puzzle == 1, "expected 1 final_puzzle path, got " .. #by_tier.final_puzzle)
 
         local expected_easy = {
             ["assets/puzzles/easy/1.png"] = true,
@@ -171,6 +177,8 @@ do
             "expected by_tier.med[1] to be assets/puzzles/med/1.png, got " .. tostring(by_tier.med[1]))
         assert(by_tier.hard[1] == "assets/puzzles/hard/1.png",
             "expected by_tier.hard[1] to be assets/puzzles/hard/1.png, got " .. tostring(by_tier.hard[1]))
+        assert(by_tier.final_puzzle[1] == "assets/puzzles/final_puzzle/1.png",
+            "expected by_tier.final_puzzle[1] to be assets/puzzles/final_puzzle/1.png, got " .. tostring(by_tier.final_puzzle[1]))
 
         -- No cross-tier contamination: no tier's array should contain a path
         -- belonging to a different tier's directory.
@@ -185,7 +193,7 @@ do
             end
         end
 
-        print("PASS: puzzle_catalog: list_by_tier() partitions paths into easy/med/hard, filtering out non-.png entries, with no cross-tier contamination")
+        print("PASS: puzzle_catalog: list_by_tier() partitions paths into easy/med/hard/final_puzzle, filtering out non-.png entries, with no cross-tier contamination")
     else
         -- The module-level cache was already populated by an earlier test
         -- block's real scan before our mock was installed; our mock never
@@ -195,8 +203,9 @@ do
         local keys = {}
         for k in pairs(by_tier) do keys[#keys + 1] = k end
         table.sort(keys)
-        assert(#keys == 3 and keys[1] == "easy" and keys[2] == "hard" and keys[3] == "med",
-            "expected exactly the keys easy/hard/med, got: " .. table.concat(keys, ", "))
+        assert(#keys == 4 and keys[1] == "easy" and keys[2] == "final_puzzle"
+            and keys[3] == "hard" and keys[4] == "med",
+            "expected exactly the keys easy/final_puzzle/hard/med, got: " .. table.concat(keys, ", "))
 
         for _, tier in ipairs(TIER_NAMES) do
             local prefix = "assets/puzzles/" .. tier .. "/"
@@ -208,7 +217,7 @@ do
             end
         end
 
-        print("PASS: puzzle_catalog: list_by_tier() returns easy/med/hard tables scoped to their own tier's .png paths (cache pre-populated by an earlier test block; mock not exercised)")
+        print("PASS: puzzle_catalog: list_by_tier() returns easy/med/hard/final_puzzle tables scoped to their own tier's .png paths (cache pre-populated by an earlier test block; mock not exercised)")
     end
 end
 
@@ -222,6 +231,7 @@ do
         ["assets/puzzles/easy"] = {"1.png", "2.png", "3.png"},
         ["assets/puzzles/med"]  = {"1.png"},
         ["assets/puzzles/hard"] = {"1.png"},
+        ["assets/puzzles/final_puzzle"] = {"1.png"},
     }
 
     local call_count = 0

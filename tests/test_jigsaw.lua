@@ -651,6 +651,27 @@ do
     print("PASS: jigsaw_box: _eject_next keeps ejected pieces within world bounds near an edge")
 end
 
+-- _eject_next never places a piece on the wall-view tile's reserved cell ---
+
+do
+    GameState:reset()
+    local world_w, world_h = 20 * C.SLOT, 10 * C.SLOT
+    -- Place the box one row below the wall tile so (world_w - C.SLOT, 0) is
+    -- the nearest candidate at d=1 and would be picked without the fix.
+    local box = new_easy_box(world_w - C.SLOT, C.SLOT, world_w, world_h)
+    local pieces = {}
+    box:interact()
+    for i = 1, 9 do
+        box:update(1.0, pieces)
+    end
+    for i, p in ipairs(pieces) do
+        assert(not (p.sprite.x == world_w - C.SLOT and p.sprite.y == 0),
+            "piece " .. i .. " must not land on the wall tile's reserved cell (" ..
+            (world_w - C.SLOT) .. ", 0)")
+    end
+    print("PASS: jigsaw_box: _eject_next never places a piece on the wall-view tile's reserved cell")
+end
+
 -- pieces_to_spawn slices the image into 9 distinct cells (shuffle) --------
 
 do
@@ -1181,6 +1202,57 @@ do
     print("PASS: jigsaw_box: grid inference for a hard/ (320x320) image yields cols=5, rows=5, piece_count=25")
 end
 
+-- final_puzzle: only selectable once every easy/med/hard path has been -------
+-- marked seen (full exhaustion, not a solve-count threshold) -- draws the
+-- 448x448 image and infers a 7x7 grid -----------------------------------
+
+do
+    GameState:reset()
+    local by_tier = PuzzleCatalog.list_by_tier()
+
+    -- Before exhaustion: final_puzzle must not be selectable, even with
+    -- med/hard unlocked and every OTHER tier's paths fully seen -- only
+    -- hard's last path is left unseen.
+    for _, path in ipairs(by_tier.easy) do GameState:mark_seen("easy", path) end
+    for _, path in ipairs(by_tier.med) do GameState:mark_seen("med", path) end
+    for i, path in ipairs(by_tier.hard) do
+        if i < #by_tier.hard then GameState:mark_seen("hard", path) end
+    end
+    assert(GameState:is_tier_unlocked("final_puzzle", by_tier) == false,
+        "final_puzzle should stay locked while 'hard' still has one unseen path")
+
+    -- Mark the remaining hard path seen: easy/med/hard are now fully
+    -- exhausted, so final_puzzle unlocks and is the only path left in the
+    -- pool.
+    for _, path in ipairs(by_tier.hard) do GameState:mark_seen("hard", path) end
+
+    local real_newImage = love.graphics.newImage
+    local last_path = nil
+    love.graphics.newImage = function(path, ...)
+        last_path = path
+        return real_newImage(path, ...)
+    end
+
+    local box = JigsawBox.new(0, 0)
+
+    love.graphics.newImage = real_newImage
+
+    assert(box ~= nil, "JigsawBox.new() should still produce a box once final_puzzle is the only unseen tier")
+    assert(box.tier == "final_puzzle",
+        "with easy/med/hard fully exhausted, box.tier should be 'final_puzzle', got " .. tostring(box.tier))
+    assert(last_path:find("/final_puzzle/", 1, true),
+        "expected the loaded image path to be under assets/puzzles/final_puzzle/, got " .. tostring(last_path))
+    assert(box.cols == 7, "box.cols should be inferred as 7 for a 448px-wide final_puzzle image, got " .. tostring(box.cols))
+    assert(box.rows == 7, "box.rows should be inferred as 7 for a 448px-tall final_puzzle image, got " .. tostring(box.rows))
+    assert(box.piece_count == 49, "box.piece_count should be rows*cols == 49, got " .. tostring(box.piece_count))
+
+    -- Pool is now fully drained (every tier, including final_puzzle, is
+    -- exhausted): this really was the last possible puzzle.
+    assert(JigsawBox.new(0, 0) == nil,
+        "JigsawBox.new() should return nil once final_puzzle has also been drawn -- no puzzles left at all")
+    print("PASS: jigsaw_box: final_puzzle only unlocks once easy/med/hard are fully exhausted, then yields a 7x7/49-piece box, and is the true last draw")
+end
+
 -- Drawer:remove ------------------------------------------------------------
 
 do
@@ -1594,6 +1666,35 @@ do
     print("PASS: jigsaw_piece: new() copies visual.row/visual.col onto the piece")
 end
 
+-- start_celebrate() / update_celebrate() ------------------------------------
+
+do
+    local p = JigsawPiece.new(0, {1, 0, 0, 1})
+    p:start_celebrate()
+    assert(p.state == "celebrating", "state should be 'celebrating' after start_celebrate()")
+    assert(p.celebrate_timer == C.PIECE_CELEBRATE_DURATION,
+        "celebrate_timer should be C.PIECE_CELEBRATE_DURATION, got " .. tostring(p.celebrate_timer))
+    print("PASS: jigsaw_piece: start_celebrate() sets state to 'celebrating' with a full celebrate_timer")
+end
+
+do
+    local p = JigsawPiece.new(0, {1, 0, 0, 1})
+    p:start_celebrate()
+    local done = p:update_celebrate(C.PIECE_CELEBRATE_DURATION / 2)
+    assert(not done, "update_celebrate() should return false while time remains")
+    assert(p.state == "celebrating", "state should still be 'celebrating' mid-animation")
+    print("PASS: jigsaw_piece: update_celebrate() returns false while time remains")
+end
+
+do
+    local p = JigsawPiece.new(0, {1, 0, 0, 1})
+    p:start_celebrate()
+    local done = p:update_celebrate(C.PIECE_CELEBRATE_DURATION + 0.1)
+    assert(done, "update_celebrate() should return true once the timer expires")
+    assert(p.state == "vanishing", "state should be 'vanishing' once celebration ends")
+    print("PASS: jigsaw_piece: update_celebrate() transitions to 'vanishing' when done")
+end
+
 -- start_vanish() ------------------------------------------------------------
 
 do
@@ -1827,15 +1928,15 @@ do
     gs.active_puzzles[#gs.active_puzzles + 1] = entry
 
     -- First update(): the one-shot solved check fires (assembled == true),
-    -- start_vanish() runs on every piece, and the same call already drives
-    -- one small update_fade() tick on each piece since it's now "vanishing".
+    -- start_celebrate() runs on every piece, entering the shine-sweep
+    -- animation state before the eventual fade.
     gs:update(1 / 60)
 
     assert(entry.solved == true, "active_puzzles entry.solved should be set true once the arrangement is detected")
     assert(GameState.solved_count == 1,
         "GameState.solved_count should increase by 1 the instant entry.solved flips to true, got " .. GameState.solved_count)
     for _, p in ipairs(spawned) do
-        assert(p.state == "vanishing", "every piece should be in the 'vanishing' state after the solved check fires")
+        assert(p.state == "celebrating", "every piece should be in the 'celebrating' state after the solved check fires")
     end
     assert(#gs.pieces == 9,
         "pieces should not be removed yet after only one small fade tick")
@@ -1845,8 +1946,10 @@ do
     end
     assert(found_entry, "active_puzzles entry should not be pruned yet, before pieces finish fading")
 
-    -- Drive enough more time for the fade to fully complete.
-    gs:update(C.PIECE_FADE_DURATION)
+    -- Drive enough more time for the celebration + fade to fully complete.
+    -- Two separate calls: one drains the celebrate timer, the next drains fade.
+    gs:update(C.PIECE_CELEBRATE_DURATION + 0.01)
+    gs:update(C.PIECE_FADE_DURATION + 0.01)
 
     assert(GameState.solved_count == 1,
         "GameState.solved_count should not increase again on later fade-out frames, got " .. GameState.solved_count)
@@ -1921,7 +2024,7 @@ do
     gs.active_puzzles[#gs.active_puzzles + 1] = entry_b
 
     -- First update(): puzzle A (correctly arranged, 9 pieces) should solve
-    -- and start vanishing even though puzzle B's 4 pieces are also on the
+    -- and start celebrating even though puzzle B's 4 pieces are also on the
     -- field (gs.pieces totals 13) -- neither a stale global count nor
     -- puzzle B's presence should block puzzle A's own per-entry check.
     gs:update(1 / 60)
@@ -1931,15 +2034,16 @@ do
     assert(GameState.solved_count == 1,
         "GameState.solved_count should increase by 1 the instant puzzle A's entry.solved flips to true, got " .. GameState.solved_count)
     for _, p in ipairs(spawned_a) do
-        assert(p.state == "vanishing", "puzzle A's pieces should start vanishing once solved")
+        assert(p.state == "celebrating", "puzzle A's pieces should start celebrating once solved")
     end
     for _, p in ipairs(spawned_b) do
         assert(p.state == "grounded", "puzzle B's pieces should be untouched while unsolved")
     end
 
-    -- Drive time forward so puzzle A's pieces fully fade and its
+    -- Drive time forward so puzzle A's pieces fully celebrate+fade and its
     -- active_puzzles entry gets pruned -- puzzle B must be unaffected.
-    gs:update(C.PIECE_FADE_DURATION)
+    gs:update(C.PIECE_CELEBRATE_DURATION + 0.01)
+    gs:update(C.PIECE_FADE_DURATION + 0.01)
 
     assert(GameState.solved_count == 1,
         "GameState.solved_count should not increase again while puzzle A's pieces are only fading, got " .. GameState.solved_count)
@@ -1970,7 +2074,7 @@ do
     assert(GameState.solved_count == 2,
         "GameState.solved_count should increase by 1 again the instant puzzle B's entry.solved flips to true, got " .. GameState.solved_count)
     for _, p in ipairs(spawned_b) do
-        assert(p.state == "vanishing", "puzzle B's pieces should start vanishing once solved")
+        assert(p.state == "celebrating", "puzzle B's pieces should start celebrating once solved")
     end
     print("PASS: game_scene: two differently-sized puzzles solve and vanish independently via active_puzzles")
 end
@@ -2076,10 +2180,11 @@ do
     assert(GameState.solved_count == 1,
         "GameState.solved_count should increase once the resumed puzzle solves, got " .. GameState.solved_count)
     for _, p in ipairs(entry.pieces) do
-        assert(p.state == "vanishing", "every piece should start vanishing once the resumed puzzle is detected solved")
+        assert(p.state == "celebrating", "every piece should start celebrating once the resumed puzzle is detected solved")
     end
 
-    gs:update(C.PIECE_FADE_DURATION)
+    gs:update(C.PIECE_CELEBRATE_DURATION + 0.01)
+    gs:update(C.PIECE_FADE_DURATION + 0.01)
 
     assert(#gs.completed_puzzles == 1,
         "solved puzzle should be shelved onto completed_puzzles once fully faded, got " .. #gs.completed_puzzles)
@@ -2308,7 +2413,8 @@ do
     gs:update(1 / 60)
     assert(entry.solved == true, "entry should be solved once the correctly-arranged pieces are detected")
 
-    gs:update(C.PIECE_FADE_DURATION)
+    gs:update(C.PIECE_CELEBRATE_DURATION + 0.01)
+    gs:update(C.PIECE_FADE_DURATION + 0.01)
 
     assert(#gs.completed_puzzles == 1,
         "one puzzle should be shelved onto completed_puzzles after fully fading, got " .. #gs.completed_puzzles)
@@ -2363,7 +2469,8 @@ do
 
     gs:update(1 / 60)
     assert(entry_b.solved == true, "second entry should solve once its pieces are correctly arranged")
-    gs:update(C.PIECE_FADE_DURATION)
+    gs:update(C.PIECE_CELEBRATE_DURATION + 0.01)
+    gs:update(C.PIECE_FADE_DURATION + 0.01)
 
     assert(#gs.completed_puzzles == 2,
         "a second puzzle should be shelved after fading, got " .. #gs.completed_puzzles)
@@ -2421,7 +2528,8 @@ do
         gs.active_puzzles[#gs.active_puzzles + 1] = entry
         gs:update(1 / 60)
         assert(entry.solved == true, "synthetic 5x5 entry should solve once correctly arranged")
-        gs:update(C.PIECE_FADE_DURATION)
+        gs:update(C.PIECE_CELEBRATE_DURATION + 0.01)
+        gs:update(C.PIECE_FADE_DURATION + 0.01)
     end
 
     -- world_w is 1280px; each 5x5 puzzle is 320px wide plus a 64px gap

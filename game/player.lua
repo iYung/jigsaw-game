@@ -74,7 +74,7 @@ function Player.new(x, y, input)
     return self
 end
 
-function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
+function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen, help_tile)
     -- Always run first, unconditionally: _pressed/_down in lua/core/input.lua
     -- are edge-triggered, so skipping this while frozen would desync edge
     -- detection for whenever the player unfreezes.
@@ -87,13 +87,23 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
         -- can't share code with it, since only one of the two branches ever
         -- runs per frame (never both, so wall_tile:interact() can't
         -- double-fire on the same press).
-        if self.input:pressed("interact") and self.held_piece == nil and wall_tile ~= nil then
+        if self.input:pressed("interact") and self.held_piece == nil then
             local centre = self:centre()
-            local wc = wall_tile:centre()
-            local dx = wc.x - centre.x
-            local dy = wc.y - centre.y
-            if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
-                wall_tile:interact()
+            if wall_tile ~= nil then
+                local wc = wall_tile:centre()
+                local dx = wc.x - centre.x
+                local dy = wc.y - centre.y
+                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
+                    wall_tile:interact()
+                end
+            end
+            if help_tile ~= nil then
+                local hc = help_tile:centre()
+                local dx = hc.x - centre.x
+                local dy = hc.y - centre.y
+                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
+                    help_tile:interact()
+                end
             end
         end
         return
@@ -197,12 +207,21 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen)
                     wall_tile:interact()
                 end
             end
+            if self.held_piece == nil and help_tile ~= nil then
+                local hc = help_tile:centre()
+                local dx = hc.x - centre.x
+                local dy = hc.y - centre.y
+                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
+                    help_tile:interact()
+                end
+            end
         end
     end
 
     if self.input:pressed("rotate_piece") then
         if self.held_piece ~= nil then
             self.held_piece:rotate()
+            Sound.play("rotate")
         end
     end
 

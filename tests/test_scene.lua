@@ -260,4 +260,42 @@ do
     print("PASS: scene: pressing interact again while frozen in wall view correctly returns to 'play'")
 end
 
+-- _compute_wall_target() reflects newly shelved puzzles added after entering wall view ---
+do
+    GameState:reset()
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    -- Enter wall view with one synthetic puzzle.
+    gs.completed_puzzles = {
+        {x = 0, y = -128, cols = 2, rows = 2},
+    }
+    gs:_toggle_wall_view("p1")
+    assert(gs.view1 == "wall", "view1 should be 'wall'")
+    local target_before = {x = gs.wall_target1.x, y = gs.wall_target1.y}
+
+    -- Simulate a second puzzle being shelved while already in wall view.
+    gs.completed_puzzles[#gs.completed_puzzles + 1] = {
+        x = 256, y = -384, cols = 3, rows = 3,
+    }
+
+    -- Call _compute_wall_target directly (the same function update() now calls every frame).
+    local t = gs:_compute_wall_target()
+    assert(t ~= nil, "_compute_wall_target() must return non-nil with two puzzles")
+
+    -- Puzzle 1: x=0..128, y=-128..0 (cols=2,rows=2 → w=128,h=128)
+    -- Puzzle 2: x=256..448, y=-384..−192 (cols=3,rows=3 → w=192,h=192)
+    -- Combined: x in [0, 448], y in [-384, 0]
+    -- center x = 224, center y = -192
+    assert(math.abs(t.x - 224) < 1e-9,
+        "_compute_wall_target().x should be 224 with both puzzles, got " .. tostring(t.x))
+    assert(math.abs(t.y - (-192)) < 1e-9,
+        "_compute_wall_target().y should be -192 with both puzzles, got " .. tostring(t.y))
+
+    -- Confirm target_before was different (it only knew about puzzle 1)
+    assert(target_before.y ~= t.y,
+        "wall_target computed after adding puzzle 2 must differ from initial target (stale-target regression)")
+    print("PASS: scene: _compute_wall_target() reflects newly shelved puzzles added after entering wall view")
+end
+
 print("ALL TESTS PASSED")

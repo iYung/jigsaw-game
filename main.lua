@@ -43,6 +43,8 @@ local SFX_MANIFEST = {
         "menu_navigate",
         "menu_confirm",
         "puzzle_complete",
+        "rotate",
+        "poof",
     },
     music = {
         menu = { path = "assets/music/menu.mp3", autoplay = true, looping = true },

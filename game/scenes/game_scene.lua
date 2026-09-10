@@ -10,6 +10,7 @@ local JigsawPiece = require("game/jigsaw_piece")
 local JigsawSolver = require("game/jigsaw_solver")
 local PuzzlePile = require("game/puzzle_pile")
 local WallViewTile = require("game/wall_view_tile")
+local HelpTile   = require("game/help_tile")
 local GameState  = require("game/game_state")
 
 -- Logical/virtual resolution the whole game renders at before letterboxing
@@ -236,6 +237,12 @@ function GameScene:on_enter()
     self.wall_tile = WallViewTile.new(WORLD_W - C.SLOT, 0, function() self:_toggle_wall_view("p1") end)
     self.drawer:add(self.wall_tile, C.PRIORITY_PIECE)
 
+    self.help_tile = HelpTile.new(0, WORLD_H - C.SLOT, function() self:_toggle_help() end)
+    self.drawer:add(self.help_tile, C.PRIORITY_PIECE)
+    self.help_mode = false
+    self.help_overlay_drawable = { draw = function() if self.help_mode then self:_draw_help_overlay() end end }
+    self.drawer:add(self.help_overlay_drawable, 9)
+
     self.view1 = "play"
     self.wall_target1 = nil
     if GameState.player_count == 2 then
@@ -266,6 +273,9 @@ function GameScene:_spawn_box()
             occupied = true
         end
         if not occupied and self.wall_tile.sprite.x == cx and self.wall_tile.sprite.y == cy then
+            occupied = true
+        end
+        if not occupied and self.help_tile.sprite.x == cx and self.help_tile.sprite.y == cy then
             occupied = true
         end
 
@@ -321,10 +331,10 @@ function GameScene:update(dt)
     end
 
     self.player:update(dt, self.pieces, self.boxes, self.pile, self.drawer,
-        self.wall_tile, self.view1 == "wall")
+        self.wall_tile, self.view1 == "wall", self.help_tile)
     if self.player2 then
         self.player2:update(dt, self.pieces, self.boxes, self.pile, self.drawer,
-            self.wall_tile2, self.view2 == "wall")
+            self.wall_tile2, self.view2 == "wall", self.help_tile)
     end
 
     for _, entry in ipairs(self.active_puzzles) do
@@ -400,6 +410,70 @@ function GameScene:update(dt)
     end
 end
 
+function GameScene:_toggle_help()
+    self.help_mode = not self.help_mode
+    self.help_tile.active = self.help_mode
+end
+
+-- Draws a coloured overlay on each piece to show connection validity.
+-- Green = ≥1 correct same-puzzle neighbor, 0 incorrect.
+-- Red   = ≥1 incorrect same-puzzle neighbor.
+-- Called from within an active camera transform.
+function GameScene:_draw_help_overlay()
+    local all_pieces = {}
+    for _, p in ipairs(self.pieces) do
+        all_pieces[#all_pieces + 1] = p
+    end
+    if self.player.held_piece then
+        all_pieces[#all_pieces + 1] = self.player.held_piece
+    end
+    if self.player2 and self.player2.held_piece then
+        all_pieces[#all_pieces + 1] = self.player2.held_piece
+    end
+
+    for _, piece in ipairs(all_pieces) do
+        if piece.path then
+            local correct = 0
+            local incorrect = 0
+            local k = piece.rotation_step
+            local gx_a, gy_a = JigsawSolver.rotate_cell(piece.row, piece.col, k)
+            local ox_a = piece.sprite.x / C.SLOT - gx_a
+            local oy_a = piece.sprite.y / C.SLOT - gy_a
+
+            for _, other in ipairs(all_pieces) do
+                if other ~= piece and other.path == piece.path then
+                    local dx = math.abs(other.sprite.x - piece.sprite.x)
+                    local dy = math.abs(other.sprite.y - piece.sprite.y)
+                    local adjacent = (dx == C.SLOT and dy == 0) or (dx == 0 and dy == C.SLOT)
+                    if adjacent then
+                        if other.rotation_step == k then
+                            local gx_b, gy_b = JigsawSolver.rotate_cell(other.row, other.col, k)
+                            local ox_b = other.sprite.x / C.SLOT - gx_b
+                            local oy_b = other.sprite.y / C.SLOT - gy_b
+                            if ox_b == ox_a and oy_b == oy_a then
+                                correct = correct + 1
+                            else
+                                incorrect = incorrect + 1
+                            end
+                        else
+                            incorrect = incorrect + 1
+                        end
+                    end
+                end
+            end
+
+            if correct >= 1 and incorrect == 0 then
+                love.graphics.setColor(0.2, 0.9, 0.2, 0.45)
+                love.graphics.rectangle("fill", piece.sprite.x, piece.sprite.y, C.SLOT, C.SLOT)
+            elseif incorrect >= 1 then
+                love.graphics.setColor(0.9, 0.2, 0.2, 0.45)
+                love.graphics.rectangle("fill", piece.sprite.x, piece.sprite.y, C.SLOT, C.SLOT)
+            end
+        end
+    end
+    love.graphics.setColor(1, 1, 1, 1)
+end
+
 -- Flips the given player's ("p1"/"p2") view between "play" and "wall".
 -- Entering "wall" computes a target camera center/zoom that fits the full
 -- Returns a camera target {x, y, zoom} that frames the full bounding box of
@@ -469,7 +543,7 @@ function GameScene:draw()
     end
 
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("WASD: move   E: pick up / drop   R: rotate   ESC / Start: settings", 16, 16)
+    love.graphics.print("WASD: move   E: pick up / drop / help (↙)   R: rotate   ESC / Start: settings", 16, 16)
     local c = self.player:centre()
     love.graphics.print(string.format("player (%.0f, %.0f)", c.x, c.y), 16, 36)
     if self.camera2 then

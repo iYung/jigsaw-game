@@ -298,4 +298,33 @@ do
     print("PASS: scene: _compute_wall_target() reflects newly shelved puzzles added after entering wall view")
 end
 
+-- Test 13: on_exit() calls Sound.stop_music for each bg track so bg music
+-- doesn't bleed into the main menu when the player returns via settings.
+do
+    GameState:reset()
+    local Sound = require("lua/core/sound")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    local stopped = {}
+    local orig_stop = Sound.stop_music
+    Sound.stop_music = function(name)
+        stopped[#stopped + 1] = name
+        orig_stop(name)
+    end
+
+    gs:on_exit()
+
+    Sound.stop_music = orig_stop
+
+    local stopped_set = {}
+    for _, n in ipairs(stopped) do stopped_set[n] = true end
+    for _, name in ipairs({"bg1", "bg2", "bg3", "bg4"}) do
+        assert(stopped_set[name],
+            "GameScene:on_exit() should call Sound.stop_music('" .. name .. "') but did not")
+    end
+    print("PASS: scene: GameScene:on_exit() calls Sound.stop_music for each bg track")
+end
+
 print("ALL TESTS PASSED")

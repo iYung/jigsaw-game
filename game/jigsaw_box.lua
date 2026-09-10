@@ -137,6 +137,7 @@ function JigsawBox:_eject_next(pieces)
             local tx = bx + pair[1] * C.SLOT
             local ty = by + pair[2] * C.SLOT
             local out_of_bounds = tx < 0 or tx >= self.world_w or ty < 0 or ty >= self.world_h
+            local is_reserved = (tx == self.world_w - C.SLOT and ty == 0)
             local occupied = false
             for _, p in ipairs(pieces) do
                 if p.state == "grounded" and p.sprite.x == tx and p.sprite.y == ty then
@@ -144,7 +145,7 @@ function JigsawBox:_eject_next(pieces)
                     break
                 end
             end
-            if not occupied and not out_of_bounds then
+            if not occupied and not out_of_bounds and not is_reserved then
                 cx, cy = tx, ty
                 break
             end

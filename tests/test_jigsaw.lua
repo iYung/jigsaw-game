@@ -1907,7 +1907,7 @@ do
     gs.active_puzzles[#gs.active_puzzles + 1] = entry
 
     -- First update(): the one-shot solved check fires (assembled == true),
-    -- start_celebrate() runs on every piece, entering the spring-bounce
+    -- start_celebrate() runs on every piece, entering the shine-sweep
     -- animation state before the eventual fade.
     gs:update(1 / 60)
 

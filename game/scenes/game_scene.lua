@@ -333,7 +333,7 @@ function GameScene:update(dt)
             Sound.play("puzzle_complete")
             GameState:puzzle_solved(entry.tier)
             for _, piece in ipairs(entry.pieces) do
-                piece:start_celebrate()
+                piece:start_celebrate(entry.cols)
             end
         end
     end

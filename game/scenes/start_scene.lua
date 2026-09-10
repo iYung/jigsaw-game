@@ -12,16 +12,9 @@ StartScene.__index = StartScene
 local LOGICAL_W, LOGICAL_H = 1280, 720
 
 local ITEM_W = 300
-local ITEM_H = 60
+local ITEM_H = 54
 local ITEM_GAP = 20
--- Leaves a 40px gap between the last menu item and the bottom edge of the
--- 720px logical canvas (previously the last item's bottom touched y=720
--- exactly, with no padding).
 local ITEMS_TOP = 300
-
-local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
-local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
-local BACKGROUND     = love.graphics.newImage("assets/backgrounds/start_bg.png")
 
 function StartScene.new(manager, on_settings)
     local self = Scene.new(LOGICAL_W, LOGICAL_H)
@@ -60,8 +53,7 @@ function StartScene:_item_rect(i)
 end
 
 -- Advances `current` by `delta` (+1 for down, -1 for up), wrapping modulo
--- `n`, but skipping index 2 ("Continue") whenever `has_save` is false --
--- mirrors /root/wip/lua/game/scenes/start_scene.lua's _next_selectable.
+-- `n`, but skipping index 2 ("Continue") whenever `has_save` is false.
 local function _next_selectable(current, delta, has_save, n)
     local s = current
     for _ = 1, n do
@@ -72,6 +64,11 @@ local function _next_selectable(current, delta, has_save, n)
 end
 
 function StartScene:on_enter()
+    self._img_bg      = love.graphics.newImage("assets/backgrounds/start_bg.png")
+    self._img_logo    = love.graphics.newImage("assets/ui/start_logo.png")
+    self._img_btn     = love.graphics.newImage("assets/ui/menu_btn.png")
+    self._img_btn_sel = love.graphics.newImage("assets/ui/menu_btn_selected.png")
+    self._font_btn    = love.graphics.newFont(13)
     self._has_save = Save.exists()
     if not Sound.is_music_playing("menu") then
         Sound.play_music("menu")
@@ -80,12 +77,7 @@ end
 
 function StartScene:on_exit() end
 
--- Clamps `player_count` to 1 if no controller is currently connected --
--- 2P has nothing to hand Player 2 in the controller-select scene without
--- one. Checked fresh at the exact moment New Game/Continue is confirmed,
--- rather than continuously every frame, so a one-frame joystick-enumeration
--- hiccup while merely navigating the menu can't silently discard a
--- deliberate 2P selection before the player ever reaches confirm.
+-- Clamps `player_count` to 1 if no controller is currently connected.
 local function _clamp_player_count(player_count)
     if player_count == 2 and #love.joystick.getJoysticks() == 0 then
         return 1
@@ -130,8 +122,7 @@ function StartScene:_confirm()
     end
 end
 
--- Flips self.player_count between 1 and 2 and keeps the "Players: N" menu
--- label (item index 3) in sync with the new value.
+-- Flips self.player_count between 1 and 2 and keeps the "Players: N" label in sync.
 function StartScene:_toggle_player_count()
     self.player_count = (self.player_count == 1) and 2 or 1
     self.items[3] = "Players: " .. self.player_count
@@ -140,15 +131,6 @@ end
 function StartScene:update(dt)
     self.input:update()
 
-    -- 2P requires a second physical input device -- with only a keyboard
-    -- detected, there's nothing distinct to hand Player 2 in the upcoming
-    -- controller-select scene. Recomputed every frame purely as a read (for
-    -- the toggle gate below and the draw() hint) -- deliberately does NOT
-    -- write self.player_count back to 1 here; that would silently discard a
-    -- deliberate 2P selection on any single-frame joystick-enumeration
-    -- hiccup while just navigating the menu. The only places player_count
-    -- actually changes are the explicit toggle keypress below and the
-    -- confirm-time clamp in _confirm().
     self._has_controller = #love.joystick.getJoysticks() > 0
 
     if self.input:pressed("down") then
@@ -184,12 +166,15 @@ function StartScene:update(dt)
 end
 
 function StartScene:draw()
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(BACKGROUND, 0, 0)
+    local prev_font = love.graphics.getFont()
 
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.printf("Jigsaw", 0, 160, LOGICAL_W, "center")
+    love.graphics.draw(self._img_bg, 0, 0)
 
+    local iw = self._img_logo:getWidth()
+    love.graphics.draw(self._img_logo, (LOGICAL_W - iw) / 2, 140)
+
+    love.graphics.setFont(self._font_btn)
     for i, label in ipairs(self.items) do
         local x, y, w, h = self:_item_rect(i)
         if i == 3 and i == self.selected then
@@ -200,20 +185,17 @@ function StartScene:draw()
         end
         if i == 2 and not self._has_save then
             love.graphics.setColor(1, 1, 1, 0.4)
-            love.graphics.draw(PANEL_NORMAL, x, y, 0, w / PANEL_NORMAL:getWidth(), h / PANEL_NORMAL:getHeight())
-
-            love.graphics.setColor(1, 1, 1, 0.4)
-            love.graphics.printf(label, x, y + h / 2 - 8, w, "center")
+            love.graphics.draw(self._img_btn, x, y)
+            love.graphics.printf(label, x, y + (h - self._font_btn:getHeight()) / 2, w, "center")
         else
-            local panel = (i == self.selected) and PANEL_SELECTED or PANEL_NORMAL
+            local img = (i == self.selected) and self._img_btn_sel or self._img_btn
             love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.draw(panel, x, y, 0, w / panel:getWidth(), h / panel:getHeight())
-
-            love.graphics.setColor(1, 1, 1, 1)
-            love.graphics.printf(label, x, y + h / 2 - 8, w, "center")
+            love.graphics.draw(img, x, y)
+            love.graphics.printf(label, x, y + (h - self._font_btn:getHeight()) / 2, w, "center")
         end
     end
 
+    love.graphics.setFont(prev_font)
     love.graphics.setColor(1, 1, 1, 1)
 end
 

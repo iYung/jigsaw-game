@@ -244,11 +244,11 @@ function GameScene:on_enter()
     self.drawer:add(self.help_overlay_drawable, 9)
 
     self.view1 = "play"
-    self.wall_target1 = nil
+    self.wall_pan1 = nil
     if GameState.player_count == 2 then
         self.wall_tile2 = WallViewTile.new(WORLD_W - C.SLOT, 0, function() self:_toggle_wall_view("p2") end)
         self.view2 = "play"
-        self.wall_target2 = nil
+        self.wall_pan2 = nil
     end
 end
 
@@ -391,18 +391,20 @@ function GameScene:update(dt)
     end
 
     if self.view1 == "wall" then
-        local t = self:_compute_wall_target()
-        if t then self.wall_target1 = t end
-        self.camera:follow(self.wall_target1, 0.85)
+        local dir = self.player:movement_dir()
+        self.wall_pan1.x = math.max(0, math.min(self.world_w, self.wall_pan1.x + dir.dx * C.WALL_VIEW_PAN_SPEED * dt))
+        self.wall_pan1.y = math.max(0, math.min(self.world_h, self.wall_pan1.y + dir.dy * C.WALL_VIEW_PAN_SPEED * dt))
+        self.camera:follow({x = self.wall_pan1.x, y = self.wall_pan1.y, zoom = C.WALL_VIEW_ZOOM}, 0.85)
     else
         local c = self.player:centre()
         self.camera:follow({x = c.x, y = c.y, zoom = 1.0}, 0.85)
     end
     if self.camera2 then
         if self.view2 == "wall" then
-            local t = self:_compute_wall_target()
-            if t then self.wall_target2 = t end
-            self.camera2:follow(self.wall_target2, 0.85)
+            local dir2 = self.player2:movement_dir()
+            self.wall_pan2.x = math.max(0, math.min(self.world_w, self.wall_pan2.x + dir2.dx * C.WALL_VIEW_PAN_SPEED * dt))
+            self.wall_pan2.y = math.max(0, math.min(self.world_h, self.wall_pan2.y + dir2.dy * C.WALL_VIEW_PAN_SPEED * dt))
+            self.camera2:follow({x = self.wall_pan2.x, y = self.wall_pan2.y, zoom = C.WALL_VIEW_ZOOM}, 0.85)
         else
             local c2 = self.player2:centre()
             self.camera2:follow({x = c2.x, y = c2.y, zoom = 1.0}, 0.85)
@@ -503,13 +505,13 @@ function GameScene:_compute_wall_target()
 end
 
 -- Flips the given player's ("p1"/"p2") view between "play" and "wall".
--- Entering "wall" sets an initial camera target from the current shelf
--- bounding box (see docs/design/wall-view-tile.md); a no-op if the shelf is
--- empty. The target is then kept fresh every frame by update() so newly
--- shelved puzzles are automatically included.
+-- Entering "wall" seeds wall_pan1/wall_pan2 from the bounding-box centre of
+-- completed_puzzles, or the player's own centre when the shelf is empty.
+-- While in wall view, movement controls pan the camera at C.WALL_VIEW_PAN_SPEED;
+-- zoom is fixed at C.WALL_VIEW_ZOOM (see docs/design/wall-view-pan.md).
 function GameScene:_toggle_wall_view(which)
     local view_key = (which == "p2") and "view2" or "view1"
-    local target_key = (which == "p2") and "wall_target2" or "wall_target1"
+    local pan_key  = (which == "p2") and "wall_pan2" or "wall_pan1"
 
     if self[view_key] == "wall" then
         self[view_key] = "play"
@@ -517,9 +519,13 @@ function GameScene:_toggle_wall_view(which)
     end
 
     local t = self:_compute_wall_target()
-    if not t then return end
-
-    self[target_key] = t
+    if t then
+        self[pan_key] = {x = t.x, y = t.y}
+    else
+        local player = (which == "p2") and self.player2 or self.player
+        local c = player:centre()
+        self[pan_key] = {x = c.x, y = c.y}
+    end
     self[view_key] = "wall"
 end
 

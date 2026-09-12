@@ -245,6 +245,16 @@ function Player:drop_target()
     return { x = target_x, y = target_y, snap_x = snap_x, snap_y = snap_y }
 end
 
+function Player:movement_dir()
+    local dx = 0
+    local dy = 0
+    if self.input:is_down("left")  then dx = dx - 1 end
+    if self.input:is_down("right") then dx = dx + 1 end
+    if self.input:is_down("up")    then dy = dy - 1 end
+    if self.input:is_down("down")  then dy = dy + 1 end
+    return {dx = dx, dy = dy}
+end
+
 function Player:draw()
     if self.held_piece ~= nil then
         local drop_target = self:drop_target()

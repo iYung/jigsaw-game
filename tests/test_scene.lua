@@ -122,7 +122,8 @@ do
     print("PASS: scene: on_enter() wires up wall_tile at the floor's top-right cell, view1 starts 'play'")
 end
 
--- Test 8: _toggle_wall_view() is a no-op when completed_puzzles is empty
+-- Test 8: _toggle_wall_view() enters wall view even with an empty shelf,
+-- initializing wall_pan1 from the player's centre as a fallback.
 do
     GameState:reset()
 
@@ -130,24 +131,31 @@ do
     gs:on_enter()
     gs.completed_puzzles = {}
 
+    local player_c = gs.player:centre()
     gs:_toggle_wall_view("p1")
 
-    assert(gs.view1 == "play",
-        "_toggle_wall_view() should stay on 'play' when completed_puzzles is empty (nothing to fit), got " ..
+    assert(gs.view1 == "wall",
+        "_toggle_wall_view() should enter 'wall' even with empty shelf, got " ..
         tostring(gs.view1))
-    assert(gs.wall_target1 == nil, "wall_target1 should remain nil when the toggle no-ops")
-    print("PASS: scene: _toggle_wall_view() no-ops when completed_puzzles is empty")
+    assert(gs.wall_pan1 ~= nil, "wall_pan1 should be initialized on toggle, got nil")
+    assert(math.abs(gs.wall_pan1.x - player_c.x) < 1e-9,
+        "wall_pan1.x should default to player centre.x when shelf is empty, got " ..
+        tostring(gs.wall_pan1.x))
+    assert(math.abs(gs.wall_pan1.y - player_c.y) < 1e-9,
+        "wall_pan1.y should default to player centre.y when shelf is empty, got " ..
+        tostring(gs.wall_pan1.y))
+    print("PASS: scene: _toggle_wall_view() enters wall view with empty shelf, pans to player centre")
 end
 
--- Test 9: _toggle_wall_view() computes bounding-box center/zoom from a
--- synthetic completed_puzzles set, and toggling again returns to "play"
+-- Test 9: _toggle_wall_view() initializes wall_pan1 from the bounding-box
+-- centre of completed_puzzles, and toggling again returns to "play".
 do
     GameState:reset()
 
     local gs = GameScene.new()
     gs:on_enter()
     -- Two synthetic shelved entries: a 2x1 at (0, -64) and a 1x1 at (128, -128).
-    -- Bounding box: x in [0, 192], y in [-128, 0] -> width 192, height 128.
+    -- Bounding box: x in [0, 192], y in [-128, 0] -> center (96, -64).
     gs.completed_puzzles = {
         {x = 0,   y = -64,  cols = 2, rows = 1},
         {x = 128, y = -128, cols = 1, rows = 1},
@@ -157,45 +165,41 @@ do
 
     assert(gs.view1 == "wall", "view1 should become 'wall' after toggling with a non-empty wall, got " ..
         tostring(gs.view1))
-    assert(gs.wall_target1 ~= nil, "wall_target1 should be set after entering wall view")
-    assert(math.abs(gs.wall_target1.x - 96) < 1e-9,
-        "wall_target1.x should be the bbox center x = (0+192)/2 = 96, got " .. tostring(gs.wall_target1.x))
-    assert(math.abs(gs.wall_target1.y - (-64)) < 1e-9,
-        "wall_target1.y should be the bbox center y = (-128+0)/2 = -64, got " .. tostring(gs.wall_target1.y))
-    -- expected zoom = min(1.0, 0.9 * min(1280/192, 720/128)) = min(1.0, 0.9 * min(6.667, 5.625)) = min(1.0, 5.0625) = 1.0
-    assert(gs.wall_target1.zoom == 1.0,
-        "wall_target1.zoom should clamp to 1.0 when the fit-zoom would exceed normal scale, got " ..
-        tostring(gs.wall_target1.zoom))
+    assert(gs.wall_pan1 ~= nil, "wall_pan1 should be set after entering wall view")
+    assert(math.abs(gs.wall_pan1.x - 96) < 1e-9,
+        "wall_pan1.x should be the bbox center x = (0+192)/2 = 96, got " .. tostring(gs.wall_pan1.x))
+    assert(math.abs(gs.wall_pan1.y - (-64)) < 1e-9,
+        "wall_pan1.y should be the bbox center y = (-128+0)/2 = -64, got " .. tostring(gs.wall_pan1.y))
 
     gs:_toggle_wall_view("p1")
     assert(gs.view1 == "play", "toggling a second time should return view1 to 'play', got " .. tostring(gs.view1))
-    print("PASS: scene: _toggle_wall_view() computes bbox center/zoom and toggles back to 'play'")
+    print("PASS: scene: _toggle_wall_view() initializes wall_pan1 from bbox centre and toggles back to 'play'")
 end
 
--- Test 10: a large wall (bigger than the logical screen) clamps zoom below
--- 1.0 to fit -- exercises the actual "zoom out" case, not just the clamp.
+-- Test 10: zoom is fixed at C.WALL_VIEW_ZOOM regardless of wall size;
+-- pan centre still initialises to the bounding-box centre.
 do
     GameState:reset()
 
     local gs = GameScene.new()
     gs:on_enter()
-    -- A single entry 30 cols wide, 20 rows tall: width = 1920, height = 1280,
-    -- both larger than the 1280x720 logical screen.
+    -- A single entry 30 cols wide, 20 rows tall: width=1920, height=1280.
+    -- Bounding box: x in [0, 1920], y in [-1280, 0] -> center (960, -640).
     gs.completed_puzzles = {
         {x = 0, y = -1280, cols = 30, rows = 20},
     }
 
     gs:_toggle_wall_view("p1")
 
-    -- expected zoom = min(1.0, 0.9 * min(1280/1920, 720/1280)) = min(1.0, 0.9*min(0.6667,0.5625)) = 0.9*0.5625 = 0.50625
-    local expected_zoom = 0.9 * math.min(1280 / 1920, 720 / 1280)
-    assert(math.abs(gs.wall_target1.zoom - expected_zoom) < 1e-9,
-        "wall_target1.zoom should fit the oversized wall with a 10% margin (expected " ..
-        tostring(expected_zoom) .. "), got " .. tostring(gs.wall_target1.zoom))
-    print("PASS: scene: _toggle_wall_view() zooms out (zoom < 1.0) to fit a wall larger than the screen")
+    assert(gs.wall_pan1 ~= nil, "wall_pan1 should be set after entering wall view")
+    assert(math.abs(gs.wall_pan1.x - 960) < 1e-9,
+        "wall_pan1.x should be bbox center x = 960, got " .. tostring(gs.wall_pan1.x))
+    assert(math.abs(gs.wall_pan1.y - (-640)) < 1e-9,
+        "wall_pan1.y should be bbox center y = -640, got " .. tostring(gs.wall_pan1.y))
+    print("PASS: scene: _toggle_wall_view() uses fixed zoom (C.WALL_VIEW_ZOOM) and correct bbox-centre pan start")
 end
 
--- Test 11: in 2-player mode, each player's view/wall_target toggles
+-- Test 11: in 2-player mode, each player's view/wall_pan toggles
 -- independently -- toggling p1 does not affect p2's view.
 do
     GameState:reset()
@@ -212,13 +216,16 @@ do
     gs:_toggle_wall_view("p1")
     assert(gs.view1 == "wall", "view1 should become 'wall' after p1 toggles")
     assert(gs.view2 == "play", "view2 should remain 'play' -- p1 toggling should not affect p2")
+    assert(gs.wall_pan1 ~= nil, "wall_pan1 should be set after p1 enters wall view")
+    assert(gs.wall_pan2 == nil, "wall_pan2 should remain nil -- p1 toggling should not affect p2")
 
     gs:_toggle_wall_view("p2")
     assert(gs.view2 == "wall", "view2 should become 'wall' after p2 toggles")
     assert(gs.view1 == "wall", "view1 should remain 'wall' -- p2 toggling should not affect p1")
+    assert(gs.wall_pan2 ~= nil, "wall_pan2 should be set after p2 enters wall view")
 
     GameState:reset()
-    print("PASS: scene: 2-player mode tracks view1/view2 and wall_target1/wall_target2 independently")
+    print("PASS: scene: 2-player mode tracks view1/view2 and wall_pan1/wall_pan2 independently")
 end
 
 -- Test 12: full end-to-end round trip through real gs:update() ticks --
@@ -260,42 +267,36 @@ do
     print("PASS: scene: pressing interact again while frozen in wall view correctly returns to 'play'")
 end
 
--- _compute_wall_target() reflects newly shelved puzzles added after entering wall view ---
+-- _compute_wall_target() correctly computes the bounding-box centre across
+-- multiple shelved puzzles (used to seed wall_pan on entry).
 do
     GameState:reset()
     local gs = GameScene.new()
     gs:on_enter()
 
-    -- Enter wall view with one synthetic puzzle.
+    -- Puzzle 1: x=0..128, y=-128..0 (cols=2,rows=2 → w=128,h=128)
+    -- Puzzle 2: x=256..448, y=-384..-192 (cols=3,rows=3 → w=192,h=192)
+    -- Combined bbox: x in [0, 448], y in [-384, 0] -> center (224, -192)
     gs.completed_puzzles = {
-        {x = 0, y = -128, cols = 2, rows = 2},
-    }
-    gs:_toggle_wall_view("p1")
-    assert(gs.view1 == "wall", "view1 should be 'wall'")
-    local target_before = {x = gs.wall_target1.x, y = gs.wall_target1.y}
-
-    -- Simulate a second puzzle being shelved while already in wall view.
-    gs.completed_puzzles[#gs.completed_puzzles + 1] = {
-        x = 256, y = -384, cols = 3, rows = 3,
+        {x = 0,   y = -128, cols = 2, rows = 2},
+        {x = 256, y = -384, cols = 3, rows = 3},
     }
 
-    -- Call _compute_wall_target directly (the same function update() now calls every frame).
     local t = gs:_compute_wall_target()
     assert(t ~= nil, "_compute_wall_target() must return non-nil with two puzzles")
-
-    -- Puzzle 1: x=0..128, y=-128..0 (cols=2,rows=2 → w=128,h=128)
-    -- Puzzle 2: x=256..448, y=-384..−192 (cols=3,rows=3 → w=192,h=192)
-    -- Combined: x in [0, 448], y in [-384, 0]
-    -- center x = 224, center y = -192
     assert(math.abs(t.x - 224) < 1e-9,
         "_compute_wall_target().x should be 224 with both puzzles, got " .. tostring(t.x))
     assert(math.abs(t.y - (-192)) < 1e-9,
         "_compute_wall_target().y should be -192 with both puzzles, got " .. tostring(t.y))
 
-    -- Confirm target_before was different (it only knew about puzzle 1)
-    assert(target_before.y ~= t.y,
-        "wall_target computed after adding puzzle 2 must differ from initial target (stale-target regression)")
-    print("PASS: scene: _compute_wall_target() reflects newly shelved puzzles added after entering wall view")
+    -- wall_pan1 is seeded from _compute_wall_target on entry; verify it matches.
+    gs:_toggle_wall_view("p1")
+    assert(gs.view1 == "wall", "view1 should be 'wall'")
+    assert(math.abs(gs.wall_pan1.x - 224) < 1e-9,
+        "wall_pan1.x should be seeded from _compute_wall_target().x = 224, got " .. tostring(gs.wall_pan1.x))
+    assert(math.abs(gs.wall_pan1.y - (-192)) < 1e-9,
+        "wall_pan1.y should be seeded from _compute_wall_target().y = -192, got " .. tostring(gs.wall_pan1.y))
+    print("PASS: scene: _compute_wall_target() correctly computes bbox centre; wall_pan1 is seeded from it on entry")
 end
 
 -- Test 13: on_exit() calls Sound.stop_music for each bg track so bg music

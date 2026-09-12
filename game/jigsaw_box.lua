@@ -101,6 +101,7 @@ function JigsawBox:update(dt, pieces)
         if self.fly_timer <= 0 then
             self.sprite.x, self.sprite.y = self.target_x, self.target_y
             self.state = "waiting"
+            Sound.play("put_down")
         end
         return
     end

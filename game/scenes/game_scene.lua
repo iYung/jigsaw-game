@@ -558,6 +558,9 @@ end
 -- switch away from a live GameScene (previously only possible by quitting
 -- the whole app, which never went through SceneManager).
 function GameScene:on_exit()
+    for _, name in ipairs(self._bg_list) do
+        Sound.stop_music(name)
+    end
     Scene.on_exit(self)
 end
 

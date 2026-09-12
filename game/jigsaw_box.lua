@@ -84,7 +84,7 @@ function JigsawBox:interact()
     end
 end
 
-function JigsawBox:update(dt, pieces)
+function JigsawBox:update(dt, pieces, reserved_cells)
     if self.state == "flying" then
         self.fly_timer = self.fly_timer - dt
         local t = 1 - math.max(0, self.fly_timer) / C.BOX_FLY_DURATION
@@ -108,15 +108,22 @@ function JigsawBox:update(dt, pieces)
     if self.state ~= "ejecting" then return end
     self.spawn_timer = self.spawn_timer - dt
     if self.spawn_timer <= 0 then
-        self:_eject_next(pieces)
+        self:_eject_next(pieces, reserved_cells)
         self.spawn_timer = 0.3
     end
 end
 
-function JigsawBox:_eject_next(pieces)
+function JigsawBox:_eject_next(pieces, reserved_cells)
     local spec = table.remove(self.pieces_to_spawn, 1)
     local bx = self.sprite.x
     local by = self.sprite.y
+
+    local excluded = {{x = bx, y = by}}
+    if reserved_cells then
+        for _, cell in ipairs(reserved_cells) do
+            excluded[#excluded + 1] = cell
+        end
+    end
 
     local cx, cy
     for d = 1, 20 do
@@ -139,7 +146,13 @@ function JigsawBox:_eject_next(pieces)
             local tx = bx + pair[1] * C.SLOT
             local ty = by + pair[2] * C.SLOT
             local out_of_bounds = tx < 0 or tx >= self.world_w or ty < 0 or ty >= self.world_h
-            local is_reserved = (tx == self.world_w - C.SLOT and ty == 0)
+            local is_reserved = false
+            for _, cell in ipairs(excluded) do
+                if cell.x == tx and cell.y == ty then
+                    is_reserved = true
+                    break
+                end
+            end
             local occupied = false
             for _, p in ipairs(pieces) do
                 if p.state == "grounded" and p.sprite.x == tx and p.sprite.y == ty then

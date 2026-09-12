@@ -24,7 +24,7 @@ local BG_H = 1296
 local BG_OFFSET_X = -608
 local BG_OFFSET_Y = -328
 
-local WALL_VIEW_ZOOM = 0.35
+local WALL_VIEW_ZOOM = 0.7
 local WALL_VIEW_PAN_SPEED = 400
 
 return {

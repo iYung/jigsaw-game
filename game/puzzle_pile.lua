@@ -3,6 +3,8 @@ local C = require("game/constants")
 local GameState = require("game/game_state")
 local PuzzleCatalog = require("game/puzzle_catalog")
 
+local PILE_BOX = love.graphics.newImage("assets/ui/pile_box.png")
+
 -- Same role game/door.lua used to play as a grid-aligned world object
 -- marking where new boxes fly in from, but drawn as a stack of small boxes
 -- (one per puzzle still left to see this session) instead of one flat tile.
@@ -59,11 +61,11 @@ function PuzzlePile:draw()
     local n = self:count()
     -- Same orange JigsawBox uses for its own sprite (jigsaw_box.lua:33), so
     -- the stacked boxes read visually as "boxes," just smaller and stacked.
-    love.graphics.setColor(1, 0.75, 0.2, 1)
+    love.graphics.setColor(1, 1, 1, 1)
     local inset = (C.SLOT - C.PILE_BOX_SIZE) / 2
     for i = 1, n do
         local by = self.sprite.y - (i - 1) * C.PILE_BOX_STACK_OFFSET
-        love.graphics.rectangle("fill", self.sprite.x + inset, by + inset, C.PILE_BOX_SIZE, C.PILE_BOX_SIZE)
+        love.graphics.draw(PILE_BOX, self.sprite.x + inset, by + inset, 0, C.PILE_BOX_SIZE / PILE_BOX:getWidth(), C.PILE_BOX_SIZE / PILE_BOX:getHeight())
     end
     love.graphics.setColor(1, 1, 1, 1)
 end

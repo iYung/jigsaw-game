@@ -719,9 +719,10 @@ do
     -- the nearest candidate at d=1 and would be picked without the fix.
     local box = new_easy_box(world_w - C.SLOT, C.SLOT, world_w, world_h)
     local pieces = {}
+    local reserved_cells = {{x = world_w - C.SLOT, y = 0}}
     box:interact()
     for i = 1, 9 do
-        box:update(1.0, pieces)
+        box:update(1.0, pieces, reserved_cells)
     end
     for i, p in ipairs(pieces) do
         assert(not (p.sprite.x == world_w - C.SLOT and p.sprite.y == 0),
@@ -729,6 +730,53 @@ do
             (world_w - C.SLOT) .. ", 0)")
     end
     print("PASS: jigsaw_box: _eject_next never places a piece on the wall-view tile's reserved cell")
+end
+
+-- _eject_next never places a piece on the box's own cell ------------------
+
+do
+    GameState:reset()
+    local world_w, world_h = 20 * C.SLOT, 10 * C.SLOT
+    local bx, by = 5 * C.SLOT, 4 * C.SLOT
+    local box = new_easy_box(bx, by, world_w, world_h)
+    local pieces = {}
+    box:interact()
+    for i = 1, 9 do
+        box:update(1.0, pieces, {})
+    end
+    for i, p in ipairs(pieces) do
+        assert(not (p.sprite.x == bx and p.sprite.y == by),
+            "piece " .. i .. " must not land on the box's own cell (" .. bx .. ", " .. by .. ")")
+    end
+    print("PASS: jigsaw_box: _eject_next never places a piece on the box's own cell")
+end
+
+-- _eject_next respects multiple reserved cells (pile + help_tile) ---------
+
+do
+    GameState:reset()
+    local world_w, world_h = 20 * C.SLOT, 10 * C.SLOT
+    -- Box at the top-left corner so the nearest free candidates include the
+    -- reserved cells below when unrestricted.
+    local box = new_easy_box(0, 0, world_w, world_h)
+    local pile_x, pile_y = C.SLOT, 0
+    local help_x, help_y = 0, C.SLOT
+    local reserved_cells = {
+        {x = pile_x, y = pile_y},
+        {x = help_x, y = help_y},
+    }
+    local pieces = {}
+    box:interact()
+    for i = 1, 9 do
+        box:update(1.0, pieces, reserved_cells)
+    end
+    for i, p in ipairs(pieces) do
+        assert(not (p.sprite.x == pile_x and p.sprite.y == pile_y),
+            "piece " .. i .. " must not land on reserved pile cell (" .. pile_x .. ", " .. pile_y .. ")")
+        assert(not (p.sprite.x == help_x and p.sprite.y == help_y),
+            "piece " .. i .. " must not land on reserved help_tile cell (" .. help_x .. ", " .. help_y .. ")")
+    end
+    print("PASS: jigsaw_box: _eject_next respects multiple reserved cells (pile and help_tile positions)")
 end
 
 -- pieces_to_spawn slices the image into 9 distinct cells (shuffle) --------
@@ -2657,6 +2705,68 @@ do
         seen[key] = true
     end
     print("PASS: game_scene: _spawn_box() places boxes on grid-aligned, in-bounds, non-colliding cells")
+end
+
+-- GameScene:_spawn_box() never places a box on a cell occupied by a grounded piece --
+
+do
+    GameState:reset()
+    local GameScene = require("game/scenes/game_scene")
+    local JigsawPiece = require("game/jigsaw_piece")
+
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    -- Fill almost every cell with grounded pieces, leaving only the pile,
+    -- wall_tile, help_tile, and the one cell that the initial on_enter() box
+    -- occupies. _spawn_box() must not clobber any piece cell on its next attempt.
+    local blocked = {}
+    blocked[gs.pile.sprite.x .. "," .. gs.pile.sprite.y] = true
+    blocked[gs.wall_tile.sprite.x .. "," .. gs.wall_tile.sprite.y] = true
+    blocked[gs.help_tile.sprite.x .. "," .. gs.help_tile.sprite.y] = true
+    for _, box in ipairs(gs.boxes) do
+        blocked[box.target_x .. "," .. box.target_y] = true
+    end
+
+    local cols = gs.world_w / C.SLOT
+    local rows = gs.world_h / C.SLOT
+    -- Leave exactly one open cell for the box to land on.
+    local open_x, open_y = 0, 0
+    for row = 0, rows - 1 do
+        for col = 0, cols - 1 do
+            local cx, cy = col * C.SLOT, row * C.SLOT
+            local key = cx .. "," .. cy
+            if not blocked[key] then
+                if open_x == 0 and open_y == 0 and not (cx == 0 and cy == 0) then
+                    open_x, open_y = cx, cy
+                else
+                    local piece = JigsawPiece.new(cx, {1, 1, 1, 1})
+                    piece.sprite.x = cx
+                    piece.sprite.y = cy
+                    piece.state = "grounded"
+                    gs.pieces[#gs.pieces + 1] = piece
+                    blocked[key] = true
+                end
+            end
+        end
+    end
+
+    local boxes_before = #gs.boxes
+    for _ = 1, 10 do
+        gs:_spawn_box()
+    end
+
+    -- Any new boxes must not occupy a piece cell.
+    for _, box in ipairs(gs.boxes) do
+        for _, piece in ipairs(gs.pieces) do
+            if piece.state == "grounded" then
+                assert(not (box.target_x == piece.sprite.x and box.target_y == piece.sprite.y),
+                    "_spawn_box() placed a box on a grounded piece at (" ..
+                    piece.sprite.x .. ", " .. piece.sprite.y .. ")")
+            end
+        end
+    end
+    print("PASS: game_scene: _spawn_box() never places a box on a cell occupied by a grounded piece")
 end
 
 -- GameScene:_spawn_box() adds the flying box to the drawer at C.PRIORITY_BOX_FLYING --

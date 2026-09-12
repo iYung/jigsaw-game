@@ -278,6 +278,30 @@ function GameScene:_spawn_box()
         if not occupied and self.help_tile.sprite.x == cx and self.help_tile.sprite.y == cy then
             occupied = true
         end
+        if not occupied then
+            for _, piece in ipairs(self.pieces) do
+                if piece.state == "grounded" and piece.sprite.x == cx and piece.sprite.y == cy then
+                    occupied = true
+                    break
+                end
+            end
+        end
+        if not occupied and self.player.held_piece then
+            local hp = self.player.held_piece
+            local snap_x = math.floor(hp.sprite.x / C.SLOT + 0.5) * C.SLOT
+            local snap_y = math.floor(hp.sprite.y / C.SLOT + 0.5) * C.SLOT
+            if snap_x == cx and snap_y == cy then
+                occupied = true
+            end
+        end
+        if not occupied and self.player2 and self.player2.held_piece then
+            local hp = self.player2.held_piece
+            local snap_x = math.floor(hp.sprite.x / C.SLOT + 0.5) * C.SLOT
+            local snap_y = math.floor(hp.sprite.y / C.SLOT + 0.5) * C.SLOT
+            if snap_x == cx and snap_y == cy then
+                occupied = true
+            end
+        end
 
         if not occupied then
             local box = JigsawBox.new(cx, cy, self.world_w, self.world_h,
@@ -307,9 +331,14 @@ function GameScene:update(dt)
         Sound.fade_music(self._bg_list[self._bg_index], 1, 2)
     end
 
+    local reserved_cells = {
+        {x = self.pile.sprite.x,      y = self.pile.sprite.y},
+        {x = self.wall_tile.sprite.x, y = self.wall_tile.sprite.y},
+        {x = self.help_tile.sprite.x, y = self.help_tile.sprite.y},
+    }
     for _, box in ipairs(self.boxes) do
         local was_flying = box.state == "flying"
-        box:update(dt, self.pieces)
+        box:update(dt, self.pieces, reserved_cells)
         if was_flying and box.state ~= "flying" then
             self.drawer:set_priority(box, C.PRIORITY_PIECE)
         end

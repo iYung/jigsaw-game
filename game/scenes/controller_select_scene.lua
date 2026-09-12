@@ -11,6 +11,9 @@ local LOGICAL_W, LOGICAL_H = 1280, 720
 local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
 local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
 
+local ICON_KEYBOARD   = love.graphics.newImage("assets/ui/icon_keyboard.png")
+local ICON_CONTROLLER = love.graphics.newImage("assets/ui/icon_controller.png")
+
 local COLUMN_W = 360
 local COLUMN_TOP = 260
 local COLUMN_H = 200
@@ -49,6 +52,7 @@ function ControllerSelectScene:on_enter()
     self._sources[#self._sources + 1] = {
         device = { type = "keyboard" },
         label  = "Keyboard",
+        icon   = ICON_KEYBOARD,
         input  = Input.new({
             left    = { "a", "left" },
             right   = { "d", "right" },
@@ -62,6 +66,7 @@ function ControllerSelectScene:on_enter()
             self._sources[#self._sources + 1] = {
                 device = { type = "gamepad", index = i },
                 label  = "Controller " .. i,
+                icon   = ICON_CONTROLLER,
                 input  = Input.new({
                     left    = {},
                     right   = {},
@@ -153,6 +158,20 @@ local function _label_for(device, sources)
     return "-"
 end
 
+-- Same lookup as _label_for(), but returns the whole matched source table
+-- (rather than just its .label) so draw() can reach fields like .icon.
+local function _source_for(device, sources)
+    if not device then
+        return nil
+    end
+    for _, source in ipairs(sources) do
+        if devices_equal(source.device, device) then
+            return source
+        end
+    end
+    return nil
+end
+
 -- Returns a new array of self._sources entries whose device isn't currently
 -- claimed by either player -- used by draw() to drop a claimed device out
 -- of the middle legend column, and reinsert it the instant it's released.
@@ -179,7 +198,14 @@ function ControllerSelectScene:draw()
     love.graphics.draw(PANEL_NORMAL, left_x, COLUMN_TOP, 0, COLUMN_W / PANEL_NORMAL:getWidth(), COLUMN_H / PANEL_NORMAL:getHeight())
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Player 1", left_x, COLUMN_TOP + 20, COLUMN_W, "center")
-    love.graphics.printf(_label_for(self.p1_device, self._sources), left_x, COLUMN_TOP + 60, COLUMN_W, "center")
+    local p1_source = _source_for(self.p1_device, self._sources)
+    if p1_source then
+        love.graphics.draw(
+            p1_source.icon,
+            left_x + (COLUMN_W - 48) / 2, COLUMN_TOP + 60 - 8,
+            0, 48 / p1_source.icon:getWidth(), 48 / p1_source.icon:getHeight()
+        )
+    end
     if self.p1_device then
         love.graphics.printf(self.p1_confirmed and "Ready!" or "press Confirm", left_x, COLUMN_TOP + 100, COLUMN_W, "center")
     end
@@ -190,7 +216,11 @@ function ControllerSelectScene:draw()
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Devices", mid_x, COLUMN_TOP + 20, COLUMN_W, "center")
     for i, source in ipairs(self:_unclaimed_sources()) do
-        love.graphics.printf(source.label, mid_x, COLUMN_TOP + 20 + i * 30, COLUMN_W, "center")
+        love.graphics.draw(
+            source.icon,
+            mid_x + (COLUMN_W - 24) / 2, COLUMN_TOP + 20 + i * 30,
+            0, 24 / source.icon:getWidth(), 24 / source.icon:getHeight()
+        )
     end
 
     -- Player 2 column
@@ -198,7 +228,14 @@ function ControllerSelectScene:draw()
     love.graphics.draw(PANEL_NORMAL, right_x, COLUMN_TOP, 0, COLUMN_W / PANEL_NORMAL:getWidth(), COLUMN_H / PANEL_NORMAL:getHeight())
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Player 2", right_x, COLUMN_TOP + 20, COLUMN_W, "center")
-    love.graphics.printf(_label_for(self.p2_device, self._sources), right_x, COLUMN_TOP + 60, COLUMN_W, "center")
+    local p2_source = _source_for(self.p2_device, self._sources)
+    if p2_source then
+        love.graphics.draw(
+            p2_source.icon,
+            right_x + (COLUMN_W - 48) / 2, COLUMN_TOP + 60 - 8,
+            0, 48 / p2_source.icon:getWidth(), 48 / p2_source.icon:getHeight()
+        )
+    end
     if self.p2_device then
         love.graphics.printf(self.p2_confirmed and "Ready!" or "press Confirm", right_x, COLUMN_TOP + 100, COLUMN_W, "center")
     end

@@ -93,6 +93,31 @@ with_joysticks({ fake_stick(), fake_stick() }, function()
     print("PASS: controller_select_scene: two controllers connected add Controller 1 and Controller 2 sources")
 end)
 
+-- Test 1b: every source built in on_enter() carries a non-nil icon field --
+-- the keyboard source's icon and each gamepad source's icon, added alongside
+-- their existing label fields (see docs/design/controller-select-icons.md).
+with_joysticks({}, function()
+    local scene = ControllerSelectScene.new({})
+    scene:on_enter()
+    assert(scene._sources[1].icon ~= nil, "zero controllers: Keyboard source should have a non-nil icon")
+    print("PASS: controller_select_scene: Keyboard source has a non-nil icon")
+end)
+
+with_joysticks({ fake_stick() }, function()
+    local scene = ControllerSelectScene.new({})
+    scene:on_enter()
+    assert(scene._sources[2].icon ~= nil, "one controller: Controller 1 source should have a non-nil icon")
+    print("PASS: controller_select_scene: one connected controller's source has a non-nil icon")
+end)
+
+with_joysticks({ fake_stick(), fake_stick() }, function()
+    local scene = ControllerSelectScene.new({})
+    scene:on_enter()
+    assert(scene._sources[2].icon ~= nil, "two controllers: Controller 1 source should have a non-nil icon")
+    assert(scene._sources[3].icon ~= nil, "two controllers: Controller 2 source should have a non-nil icon")
+    print("PASS: controller_select_scene: two connected controllers' sources both have a non-nil icon")
+end)
+
 -- Test 2: a keyboard "left" tap claims p1_device as { type = "keyboard" };
 -- a controller-1 "right" tap (dpright) claims p2_device as
 -- { type = "gamepad", index = 1 }.

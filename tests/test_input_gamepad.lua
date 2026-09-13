@@ -208,4 +208,32 @@ with_joysticks({ fake_stick({ a = true }) }, function()
     print("PASS: numeric joystick_scope 2 with only 1 controller connected is a silent no-op")
 end)
 
+-- Test 11: last_device() defaults to "keyboard" and switches to "gamepad"
+-- when a mapped gamepad button is active, then back to "keyboard" when a
+-- keyboard key is active.
+do
+    local input = Input.new({ interact = { "z" } }, {
+        gamepad_buttons = { interact = { "a" } },
+    })
+    assert(input:last_device() == "keyboard",
+        "last_device() should default to 'keyboard' before any input")
+    print("PASS: last_device() defaults to 'keyboard'")
+
+    with_joysticks({ fake_stick({ a = true }) }, function()
+        input:update()
+        assert(input:last_device() == "gamepad",
+            "last_device() should return 'gamepad' after a mapped button is active")
+    end)
+    print("PASS: last_device() returns 'gamepad' after a gamepad button press")
+
+    with_joysticks({ fake_stick() }, function()
+        love.keyboard.isDown = function(k) return k == "z" end
+        input:update()
+        love.keyboard.isDown = function() return false end
+        assert(input:last_device() == "keyboard",
+            "last_device() should return 'keyboard' after keyboard input follows gamepad input")
+    end)
+    print("PASS: last_device() switches back to 'keyboard' when a keyboard key is pressed after gamepad")
+end
+
 print("ALL TESTS PASSED")

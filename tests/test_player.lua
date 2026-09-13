@@ -180,4 +180,119 @@ with_key_down("r", function()
 end)
 print("PASS: Player:update() does not play 'rotate' sound when rotate_piece is pressed with no piece held")
 
+-- Test 5: Player.hud_hints is populated by update() based on context.
+-- Helpers --
+local C = require("game/constants")
+
+local function make_piece(x, y)
+    return {
+        state  = "grounded",
+        sprite = { x = x, y = y },
+        centre = function(self) return { x = self.sprite.x + C.U, y = self.sprite.y + C.U } end,
+    }
+end
+
+local function make_interactive(x, y)
+    return {
+        centre = function(self) return { x = x + C.U, y = y + C.U } end,
+    }
+end
+
+-- 5a: no pieces nearby -> hud_hints is empty and _hover_pos is nil
+do
+    local player = Player.new(0, 0)
+    player:update(0, {}, {}, nil, nil, nil, false, nil)
+    assert(#player.hud_hints == 0,
+        "hud_hints should be empty when nothing is nearby and player holds nothing")
+    assert(player._hover_pos == nil,
+        "_hover_pos should be nil when nothing is nearby")
+    print("PASS: hud_hints is empty and _hover_pos is nil when nothing is nearby")
+end
+
+-- 5b: piece within range -> hud_hints contains a pick-up hint and _hover_pos
+-- points at the piece's grid cell
+do
+    local player = Player.new(0, 0)
+    -- Place piece at same cell (distance 0 < 1.5*C.U)
+    local pieces = { make_piece(0, 0) }
+    player:update(0, pieces, {}, nil, nil, nil, false, nil)
+    assert(#player.hud_hints == 1 and player.hud_hints[1]:find("Pick up"),
+        "hud_hints should contain a pick-up hint when a piece is nearby")
+    assert(player._hover_pos ~= nil,
+        "_hover_pos should be set when a piece is within range")
+    assert(player._hover_pos.x == 0 and player._hover_pos.y == 0,
+        "_hover_pos should match the piece's sprite position")
+    print("PASS: hud_hints shows pick-up hint and _hover_pos targets piece when within range")
+end
+
+-- 5c: holding a piece with a free drop target -> two hints: Drop + Rotate
+do
+    local player = Player.new(0, 0)
+    local drop_target = player:drop_target()
+    player.held_piece = {
+        sprite  = { x = 0, y = 0, width = C.SLOT, height = C.SLOT, color = {1,1,1,1}, visible = true },
+        state   = "held",
+        update  = function() end,
+        draw    = function() end,
+        draw_ghost = function() end,
+    }
+    player:update(0, {}, {}, nil, nil, nil, false, nil)
+    assert(#player.hud_hints == 2,
+        "hud_hints should have 2 entries (Drop + Rotate) when holding a piece with a free drop target")
+    assert(player.hud_hints[1]:find("Drop"),    "first hint should be Drop")
+    assert(player.hud_hints[2]:find("Rotate"),  "second hint should be Rotate")
+    print("PASS: hud_hints shows Drop + Rotate when holding a piece with a free drop target")
+end
+
+-- 5d: holding a piece but drop target is blocked -> only Rotate hint
+do
+    local player = Player.new(0, 0)
+    local drop_target = player:drop_target()
+    player.held_piece = {
+        sprite  = { x = 0, y = 0, width = C.SLOT, height = C.SLOT, color = {1,1,1,1}, visible = true },
+        state   = "held",
+        update  = function() end,
+        draw    = function() end,
+        draw_ghost = function() end,
+    }
+    -- Blocker piece snapped to the same cell as the drop target
+    local blocker = {
+        state  = "grounded",
+        sprite = { x = drop_target.snap_x, y = drop_target.snap_y },
+        centre = function(self) return { x = self.sprite.x + C.U, y = self.sprite.y + C.U } end,
+    }
+    player:update(0, { blocker }, {}, nil, nil, nil, false, nil)
+    assert(#player.hud_hints == 1 and player.hud_hints[1]:find("Rotate"),
+        "hud_hints should show only Rotate when the drop target is blocked")
+    print("PASS: hud_hints shows only Rotate when drop target is blocked")
+end
+
+-- 5e: frozen (wall view) -> hud_hints is empty regardless of proximity
+do
+    local player = Player.new(0, 0)
+    local pieces = { make_piece(0, 0) }
+    local wall_tile = make_interactive(0, 0)
+    player:update(0, pieces, {}, nil, nil, wall_tile, true, nil)
+    assert(#player.hud_hints == 0,
+        "hud_hints should be empty when player is frozen (wall view)")
+    print("PASS: hud_hints is empty when frozen")
+end
+
+-- 5f: gamepad device -> button labels use [A] and [X] instead of [E] and [R]
+do
+    with_joysticks({ fake_stick({ a = true }) }, function()
+        -- Trigger a gamepad press to flip last_device to "gamepad"
+        local gp_input = Player.build_input(nil)
+        gp_input:update()
+
+        local player = Player.new(0, 0)
+        player.input = gp_input
+        local pieces = { make_piece(0, 0) }
+        player:update(0, pieces, {}, nil, nil, nil, false, nil)
+        assert(#player.hud_hints == 1 and player.hud_hints[1]:find("%[A%]"),
+            "hud_hints pick-up hint should use [A] when last device is gamepad")
+    end)
+    print("PASS: hud_hints uses [A] label when last input device is gamepad")
+end
+
 print("ALL TESTS PASSED")

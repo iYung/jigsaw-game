@@ -65,4 +65,8 @@ function HeadlessInput:pressed(action)
     return self._pressed[action] == true
 end
 
+function HeadlessInput:last_device()
+    return "keyboard"
+end
+
 return HeadlessInput

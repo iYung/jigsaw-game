@@ -70,7 +70,9 @@ function Player.new(x, y, input)
     self.sprite       = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.image = love.graphics.newImage("assets/player.png")
     self.input        = input or Player.build_input()
-    self.held_piece = nil
+    self.held_piece   = nil
+    self.hud_hints    = {}
+    self._hover_pos   = nil
     return self
 end
 
@@ -79,6 +81,82 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen, help_
     -- are edge-triggered, so skipping this while frozen would desync edge
     -- detection for whenever the player unfreezes.
     self.input:update()
+
+    -- Compute contextual HUD hints for this frame.
+    do
+        local dev    = self.input:last_device()
+        local ikey   = dev == "gamepad" and "[A]" or "[E]"
+        local rkey   = dev == "gamepad" and "[X]" or "[R]"
+        local centre = self:centre()
+        if frozen then
+            self.hud_hints  = {}
+            self._hover_pos = nil
+        elseif self.held_piece ~= nil then
+            local drop_target = self:drop_target()
+            local drop_blocked = false
+            if pieces then
+                for _, p in ipairs(pieces) do
+                    if p ~= self.held_piece and p.state == "grounded"
+                       and p.sprite.x == drop_target.snap_x and p.sprite.y == drop_target.snap_y then
+                        drop_blocked = true
+                        break
+                    end
+                end
+            end
+            if drop_blocked then
+                self.hud_hints = { rkey .. " Rotate" }
+            else
+                self.hud_hints = { ikey .. " Drop", rkey .. " Rotate" }
+            end
+            self._hover_pos = nil
+        else
+            -- Find the nearest interactable within range, tracking its grid
+            -- position so the hover highlight and the HUD hint point at the
+            -- same object.
+            local best_dist = 1.5 * C.U
+            local best_x, best_y = nil, nil
+            local function try(cx, cy, sx, sy)
+                local dx = cx - centre.x
+                local dy = cy - centre.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist <= best_dist then
+                    best_dist = dist
+                    best_x = sx
+                    best_y = sy
+                end
+            end
+            if pieces then
+                for _, piece in ipairs(pieces) do
+                    if piece.state == "grounded" then
+                        local pc = piece:centre()
+                        try(pc.x, pc.y, piece.sprite.x, piece.sprite.y)
+                    end
+                end
+            end
+            if boxes then
+                for _, b in ipairs(boxes) do
+                    if b.state == "waiting" then
+                        local bc = b:centre()
+                        try(bc.x, bc.y, b.sprite.x, b.sprite.y)
+                    end
+                end
+            end
+            for _, tile in ipairs({ pile, wall_tile, help_tile }) do
+                if tile ~= nil then
+                    local tc = tile:centre()
+                    try(tc.x, tc.y, tc.x - C.U, tc.y - C.U)
+                end
+            end
+            if best_x ~= nil then
+                self.hud_hints  = { ikey .. " Pick up" }
+                self._hover_pos = { x = best_x, y = best_y }
+            else
+                self.hud_hints  = {}
+                self._hover_pos = nil
+            end
+        end
+    end
+
     if frozen then
         -- Frozen is driven by already being in wall view, so the wall tile
         -- itself must stay interactable here -- otherwise there'd be no way
@@ -260,9 +338,17 @@ function Player:draw()
         local drop_target = self:drop_target()
         self.held_piece:draw_ghost(drop_target.snap_x, drop_target.snap_y)
     else
-        local drop_target = self:drop_target()
+        local hx, hy
+        if self._hover_pos then
+            hx = self._hover_pos.x
+            hy = self._hover_pos.y
+        else
+            local drop_target = self:drop_target()
+            hx = drop_target.snap_x
+            hy = drop_target.snap_y
+        end
         love.graphics.setColor(1, 1, 1, 0.25)
-        love.graphics.rectangle("fill", drop_target.snap_x, drop_target.snap_y, C.SLOT, C.SLOT)
+        love.graphics.rectangle("fill", hx, hy, C.SLOT, C.SLOT)
         love.graphics.setColor(1, 1, 1, 1)
     end
     self.sprite:draw()

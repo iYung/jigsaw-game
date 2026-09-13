@@ -9,7 +9,6 @@ ControllerSelectScene.__index = ControllerSelectScene
 local LOGICAL_W, LOGICAL_H = 1280, 720
 
 local PANEL_NORMAL   = love.graphics.newImage("assets/ui/panel_normal.png")
-local PANEL_SELECTED = love.graphics.newImage("assets/ui/panel_selected.png")
 
 local ICON_KEYBOARD   = love.graphics.newImage("assets/ui/icon_keyboard.png")
 local ICON_CONTROLLER = love.graphics.newImage("assets/ui/icon_controller.png")
@@ -212,7 +211,7 @@ function ControllerSelectScene:draw()
 
     -- Middle legend column
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(PANEL_SELECTED, mid_x, COLUMN_TOP, 0, COLUMN_W / PANEL_SELECTED:getWidth(), COLUMN_H / PANEL_SELECTED:getHeight())
+    love.graphics.draw(PANEL_NORMAL, mid_x, COLUMN_TOP, 0, COLUMN_W / PANEL_NORMAL:getWidth(), COLUMN_H / PANEL_NORMAL:getHeight())
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.printf("Devices", mid_x, COLUMN_TOP + 20, COLUMN_W, "center")
     for i, source in ipairs(self:_unclaimed_sources()) do

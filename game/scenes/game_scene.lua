@@ -61,9 +61,17 @@ function GameScene:on_enter()
     self.player = Player.new(0, GROUND_Y - C.SLOT, self._input_assignments and self._input_assignments.p1)
     self.drawer:add(self.player, 10)
 
+    local scene = self
     self.background = {
         image = love.graphics.newImage("assets/backgrounds/world_bg.png"),
         draw = function(self)
+            if scene.shelf_row_bottom then
+                local fill_top = scene.shelf_row_bottom - LOGICAL_H
+                if fill_top < C.BG_OFFSET_Y then
+                    love.graphics.setColor(C.BG_WALL_COLOR[1], C.BG_WALL_COLOR[2], C.BG_WALL_COLOR[3])
+                    love.graphics.rectangle("fill", C.BG_OFFSET_X, fill_top, C.BG_W, C.BG_OFFSET_Y - fill_top)
+                end
+            end
             love.graphics.setColor(1, 1, 1, 1)
             love.graphics.draw(self.image, C.BG_OFFSET_X, C.BG_OFFSET_Y)
         end,

@@ -24,6 +24,10 @@ local BG_H = 1296
 local BG_OFFSET_X = -608
 local BG_OFFSET_Y = -328
 
+-- Solid fill color matching the top edge of world_bg.png, used to extend
+-- the background upward as the completed-puzzle wall grows.
+local BG_WALL_COLOR = { 220/255, 20/255, 20/255 }
+
 local WALL_VIEW_ZOOM = 0.85
 local WALL_VIEW_PAN_SPEED = 400
 
@@ -40,6 +44,7 @@ return {
     BG_H = BG_H,
     BG_OFFSET_X = BG_OFFSET_X,
     BG_OFFSET_Y = BG_OFFSET_Y,
+    BG_WALL_COLOR = BG_WALL_COLOR,
     PIECE_CELEBRATE_DURATION = 1.2,
     PIECE_FADE_DURATION = 0.5,
     BOX_FLY_DURATION = 1.0,

@@ -23,8 +23,8 @@ function StartScene.new(manager, on_settings)
     self.on_settings = on_settings
     self.player_count = 1
     self._has_controller = #love.joystick.getJoysticks() > 0
-    self.items    = { "New Game", "Continue", "Players: 1", "Settings", "Exit Game" }
-    self.selected = 1
+    self.items    = { "Players: 1", "New Game", "Continue", "Settings", "Exit Game" }
+    self.selected = 2
     self.input    = Input.new({
         up      = { "w", "up" },
         down    = { "s", "down" },
@@ -53,12 +53,12 @@ function StartScene:_item_rect(i)
 end
 
 -- Advances `current` by `delta` (+1 for down, -1 for up), wrapping modulo
--- `n`, but skipping index 2 ("Continue") whenever `has_save` is false.
+-- `n`, but skipping index 3 ("Continue") whenever `has_save` is false.
 local function _next_selectable(current, delta, has_save, n)
     local s = current
     for _ = 1, n do
         s = ((s - 1 + delta) % n) + 1
-        if s ~= 2 or has_save then return s end
+        if s ~= 3 or has_save then return s end
     end
     return current
 end
@@ -70,6 +70,7 @@ function StartScene:on_enter()
     self._img_btn_sel = love.graphics.newImage("assets/ui/menu_btn_selected.png")
     self._font_btn    = love.graphics.newFont(13)
     self._has_save = Save.exists()
+    if self._has_save then self.selected = 3 end
     if not Sound.is_music_playing("menu") then
         Sound.play_music("menu")
     end
@@ -86,7 +87,7 @@ local function _clamp_player_count(player_count)
 end
 
 function StartScene:_confirm()
-    if self.selected == 1 then
+    if self.selected == 2 then
         Sound.play("menu_confirm")
         GameState:reset()
         GameState.player_count = _clamp_player_count(self.player_count)
@@ -96,7 +97,7 @@ function StartScene:_confirm()
             Sound.fade_music("menu", 0, 2)
             self.manager:switch(GameScene.new())
         end
-    elseif self.selected == 2 then
+    elseif self.selected == 3 then
         if not self._has_save then
             Sound.play("fail")
             return
@@ -125,7 +126,7 @@ end
 -- Flips self.player_count between 1 and 2 and keeps the "Players: N" label in sync.
 function StartScene:_toggle_player_count()
     self.player_count = (self.player_count == 1) and 2 or 1
-    self.items[3] = "Players: " .. self.player_count
+    self.items[1] = "Players: " .. self.player_count
 end
 
 function StartScene:update(dt)
@@ -148,7 +149,7 @@ function StartScene:update(dt)
         end
     end
 
-    if self.selected == 3 then
+    if self.selected == 1 then
         if self.input:pressed("left") or self.input:pressed("right") or self.input:pressed("confirm") then
             if self._has_controller then
                 self:_toggle_player_count()
@@ -177,13 +178,13 @@ function StartScene:draw()
     love.graphics.setFont(self._font_btn)
     for i, label in ipairs(self.items) do
         local x, y, w, h = self:_item_rect(i)
-        if i == 3 and i == self.selected then
+        if i == 1 and i == self.selected then
             label = "< " .. label .. " >"
             if not self._has_controller then
                 label = label .. " (connect a controller for 2P)"
             end
         end
-        if i == 2 and not self._has_save then
+        if i == 3 and not self._has_save then
             love.graphics.setColor(1, 1, 1, 0.4)
             love.graphics.draw(self._img_btn, x, y)
             love.graphics.printf(label, x, y + (h - self._font_btn:getHeight()) / 2, w, "center")

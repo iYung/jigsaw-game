@@ -84,20 +84,31 @@ local function make_save()
     }
 end
 
--- Test 1: StartScene.new(manager) starts with selected == 1
+-- Menu item order (after "players above new game" feature):
+--   1. Players: 1
+--   2. New Game
+--   3. Continue
+--   4. Settings
+--   5. Exit Game
+--
+-- Default cursor:
+--   No save  → selected == 2 (New Game)
+--   Has save → selected == 3 (Continue, set by on_enter after _has_save resolves)
+
+-- Test 1: StartScene.new(manager) defaults to selected == 2 (New Game) with no save.
 do
     reset_fs()
     local manager = {}
     local scene = StartScene.new(manager)
     scene:on_enter()
-    assert(scene.selected == 1, "StartScene.new should start with selected == 1, got " .. tostring(scene.selected))
-    print("PASS: start_scene: StartScene.new(manager) starts with selected == 1")
+    assert(scene.selected == 2, "StartScene with no save should start with selected == 2 (New Game), got " .. tostring(scene.selected))
+    print("PASS: start_scene: StartScene.new(manager) with no save starts with selected == 2 (New Game)")
 end
 
--- Test 2: pressing down cycles 1 -> 3 -> 4 -> 5 -> 1 with no save present
--- (index 2, "Continue", is disabled and must be skipped by the
--- down-navigation). Players (3), Settings (4), and Exit Game (5) are all
--- selectable, so with 5 items the full cycle now takes 4 taps instead of 3.
+-- Test 2: pressing down cycles 2 -> 4 -> 5 -> 1 -> 2 with no save present
+-- (index 3, "Continue", is disabled and must be skipped by the
+-- down-navigation). Players (1), Settings (4), and Exit Game (5) are all
+-- selectable, so the full cycle takes 4 taps.
 do
     reset_fs()
     local manager = {}
@@ -106,26 +117,23 @@ do
     assert(scene._has_save == false, "sanity: _has_save should be false with no save file")
 
     tap(scene, "s")
-    assert(scene.selected == 3,
-        "pressing down from 1 with no save should skip Continue (2) and land on Players (3), got " .. tostring(scene.selected))
-
-    tap(scene, "s")
     assert(scene.selected == 4,
-        "pressing down from Players (3) should land on Settings (4), got " .. tostring(scene.selected))
+        "pressing down from New Game (2) with no save should skip Continue (3) and land on Settings (4), got " .. tostring(scene.selected))
 
     tap(scene, "s")
     assert(scene.selected == 5,
         "pressing down from Settings (4) should land on Exit Game (5), got " .. tostring(scene.selected))
 
     tap(scene, "s")
-    assert(scene.selected == 1, "pressing down from Exit Game (5) should wrap selected to 1, got " .. tostring(scene.selected))
+    assert(scene.selected == 1, "pressing down from Exit Game (5) should wrap to Players (1), got " .. tostring(scene.selected))
 
-    print("PASS: start_scene: pressing down cycles 1 -> 3 -> 4 -> 5 -> 1, skipping disabled Continue")
+    tap(scene, "s")
+    assert(scene.selected == 2, "pressing down from Players (1) should land on New Game (2), got " .. tostring(scene.selected))
+
+    print("PASS: start_scene: pressing down cycles 2 -> 4 -> 5 -> 1 -> 2, skipping disabled Continue")
 end
 
--- Test 3: pressing up from 1 wraps directly to 5 (Exit Game) with no save
--- present -- going backward from 1 wraps straight past Continue (2),
--- Players (3), and Settings (4) to the last item.
+-- Test 3: pressing up from New Game (2) with no save lands on Players (1).
 do
     reset_fs()
     local manager = {}
@@ -134,13 +142,13 @@ do
     assert(scene._has_save == false, "sanity: _has_save should be false with no save file")
 
     tap(scene, "up")
-    assert(scene.selected == 5,
-        "pressing up from 1 with no save should wrap selected to Exit Game (5), got " .. tostring(scene.selected))
+    assert(scene.selected == 1,
+        "pressing up from New Game (2) with no save should land on Players (1), got " .. tostring(scene.selected))
 
-    print("PASS: start_scene: pressing up from 1 wraps to Exit Game (5)")
+    print("PASS: start_scene: pressing up from New Game (2) with no save lands on Players (1)")
 end
 
--- Test 4: confirming while selected == 1 ("New Game") calls manager:switch
+-- Test 4: confirming while selected == 2 ("New Game") calls manager:switch
 -- with something GameScene-shaped (has .camera and .drawer, which Scene.new
 -- always sets on any scene subclass).
 do
@@ -151,7 +159,7 @@ do
     }
     local scene = StartScene.new(manager)
     scene:on_enter()
-    assert(scene.selected == 1, "sanity: scene should start with selected == 1")
+    assert(scene.selected == 2, "sanity: scene should start with selected == 2 (New Game) with no save")
 
     tap(scene, "return")
 
@@ -159,7 +167,7 @@ do
     assert(switched_with.camera ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .camera)")
     assert(switched_with.drawer ~= nil, "manager:switch should be called with a GameScene-shaped arg (missing .drawer)")
 
-    print("PASS: start_scene: confirming New Game (selected == 1) calls manager:switch with a GameScene-shaped arg")
+    print("PASS: start_scene: confirming New Game (selected == 2) calls manager:switch with a GameScene-shaped arg")
 end
 
 -- Test 5: confirming while selected == 5 ("Exit Game") calls love.event.quit.
@@ -175,9 +183,9 @@ do
     local scene = StartScene.new(manager)
     scene:on_enter()
 
-    -- No save present, so pressing up from 1 wraps straight past Continue
-    -- (2), Players (3), and Settings (4) and lands directly on Exit Game (5).
-    tap(scene, "up")
+    -- From New Game (2), press down twice to reach Exit Game: 2 -> 4 -> 5.
+    tap(scene, "s")
+    tap(scene, "s")
     assert(scene.selected == 5, "sanity: scene should be on Exit Game (selected == 5) before confirming")
 
     local quit_called = false
@@ -193,7 +201,7 @@ do
     print("PASS: start_scene: confirming Exit Game (selected == 5) calls love.event.quit")
 end
 
--- Test 8: with no save present, confirming while selected == 2 ("Continue")
+-- Test 8: with no save present, confirming while selected == 3 ("Continue")
 -- is a no-op -- manager:switch should never be called.
 do
     reset_fs()
@@ -205,7 +213,7 @@ do
     scene:on_enter()
     assert(scene._has_save == false, "sanity: _has_save should be false with no save file")
 
-    scene.selected = 2
+    scene.selected = 3
     tap(scene, "return")
 
     assert(switched_with == nil,
@@ -214,7 +222,8 @@ do
     print("PASS: start_scene: confirming Continue with no save present is a no-op")
 end
 
--- Test 9: with a save file present, on_enter() sets _has_save == true.
+-- Test 9: with a save file present, on_enter() sets _has_save == true and
+-- defaults the cursor to Continue (selected == 3).
 do
     reset_fs()
     Save.write(make_save())
@@ -224,11 +233,12 @@ do
     scene:on_enter()
 
     assert(scene._has_save == true, "on_enter() should set _has_save == true when a save file is present")
+    assert(scene.selected == 3, "on_enter() should set selected == 3 (Continue) when a save file is present, got " .. tostring(scene.selected))
 
-    print("PASS: start_scene: on_enter() sets _has_save == true when a save file is present")
+    print("PASS: start_scene: on_enter() sets _has_save == true and selected == 3 (Continue) when a save file is present")
 end
 
--- Test 10: with a save file present, confirming while selected == 2
+-- Test 10: with a save file present, confirming while selected == 3
 -- ("Continue") calls manager:switch with a GameScene-shaped arg and restores
 -- GameState's fields from the save.
 do
@@ -245,7 +255,7 @@ do
     scene:on_enter()
     assert(scene._has_save == true, "sanity: _has_save should be true with a save file present")
 
-    scene.selected = 2
+    scene.selected = 3
     tap(scene, "return")
 
     assert(switched_with ~= nil, "manager:switch should have been called when confirming Continue with a save present")
@@ -265,8 +275,8 @@ do
 end
 
 -- Test 11: down/up skip-logic depends on whether a save is present -- with a
--- save, Continue (2) is no longer skipped; without one, navigation still
--- skips straight to Players (3).
+-- save, Continue (3) is no longer skipped; without one, navigation skips
+-- straight past it. Verified by navigating from Players (1) in both cases.
 do
     reset_fs()
     Save.write(make_save())
@@ -275,18 +285,26 @@ do
     scene_with_save:on_enter()
     assert(scene_with_save._has_save == true, "sanity: _has_save should be true with a save file present")
 
+    scene_with_save.selected = 1
     tap(scene_with_save, "s")
     assert(scene_with_save.selected == 2,
-        "pressing down from 1 with a save present should land on Continue (2), got " .. tostring(scene_with_save.selected))
+        "pressing down from Players (1) should land on New Game (2), got " .. tostring(scene_with_save.selected))
+    tap(scene_with_save, "s")
+    assert(scene_with_save.selected == 3,
+        "pressing down from New Game (2) with a save should land on Continue (3), got " .. tostring(scene_with_save.selected))
 
     reset_fs()
     local scene_without_save = StartScene.new(manager)
     scene_without_save:on_enter()
     assert(scene_without_save._has_save == false, "sanity: _has_save should be false with no save file")
 
+    scene_without_save.selected = 1
     tap(scene_without_save, "s")
-    assert(scene_without_save.selected == 3,
-        "pressing down from 1 with no save should skip Continue and land on Players (3), got " .. tostring(scene_without_save.selected))
+    assert(scene_without_save.selected == 2,
+        "pressing down from Players (1) should land on New Game (2), got " .. tostring(scene_without_save.selected))
+    tap(scene_without_save, "s")
+    assert(scene_without_save.selected == 4,
+        "pressing down from New Game (2) with no save should skip Continue and land on Settings (4), got " .. tostring(scene_without_save.selected))
 
     print("PASS: start_scene: down-navigation skip-logic depends on whether a save is present")
 end
@@ -313,7 +331,7 @@ do
     }
     local scene = StartScene.new(manager)
     scene:on_enter()
-    scene.selected = 1
+    scene.selected = 2
     scene:_confirm()
 
     assert(GameState.active_count == 0,
@@ -324,7 +342,7 @@ do
     print("PASS: start_scene: confirming New Game resets GameState")
 end
 
--- Test 13: the start menu's item list includes a "Players: 1" row (index 3)
+-- Test 13: the start menu's item list includes a "Players: 1" row (index 1)
 -- by default, reflecting self.player_count == 1.
 do
     reset_fs()
@@ -334,15 +352,15 @@ do
 
     assert(scene.player_count == 1,
         "StartScene.new should start with player_count == 1, got " .. tostring(scene.player_count))
-    assert(scene.items[3] == "Players: 1",
-        "items[3] should read 'Players: 1' by default, got " .. tostring(scene.items[3]))
+    assert(scene.items[1] == "Players: 1",
+        "items[1] should read 'Players: 1' by default, got " .. tostring(scene.items[1]))
 
     print("PASS: start_scene: default Players row reads 'Players: 1'")
 end
 
--- Test 14: navigating to the Players row (index 3) and pressing right
+-- Test 14: navigating to the Players row (index 1) and pressing right
 -- toggles player_count from 1 -> 2; pressing left toggles it back to 1. The
--- "Players: N" label (items[3]) stays in sync with the toggled value.
+-- "Players: N" label (items[1]) stays in sync with the toggled value.
 -- Requires a connected controller (see Test 14b) -- wrapped in
 -- with_joysticks so the toggle is actually allowed to reach 2.
 do
@@ -352,21 +370,21 @@ do
         local scene = StartScene.new(manager)
         scene:on_enter()
 
-        tap(scene, "s")
-        assert(scene.selected == 3,
-            "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+        tap(scene, "up")
+        assert(scene.selected == 1,
+            "sanity: up from New Game (2) should land on Players (1), got " .. tostring(scene.selected))
 
         tap(scene, "d")
         assert(scene.player_count == 2,
             "pressing right on Players row should toggle player_count to 2, got " .. tostring(scene.player_count))
-        assert(scene.items[3] == "Players: 2",
-            "items[3] should read 'Players: 2' after toggling, got " .. tostring(scene.items[3]))
+        assert(scene.items[1] == "Players: 2",
+            "items[1] should read 'Players: 2' after toggling, got " .. tostring(scene.items[1]))
 
         tap(scene, "a")
         assert(scene.player_count == 1,
             "pressing left on Players row should toggle player_count back to 1, got " .. tostring(scene.player_count))
-        assert(scene.items[3] == "Players: 1",
-            "items[3] should read 'Players: 1' after toggling back, got " .. tostring(scene.items[3]))
+        assert(scene.items[1] == "Players: 1",
+            "items[1] should read 'Players: 1' after toggling back, got " .. tostring(scene.items[1]))
     end)
 
     print("PASS: start_scene: left/right on Players row toggles player_count between 1 and 2")
@@ -383,15 +401,15 @@ do
     scene:on_enter()
     assert(scene._has_controller == false, "sanity: no controller should be detected in this test's headless environment")
 
-    tap(scene, "s")
-    assert(scene.selected == 3,
-        "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+    tap(scene, "up")
+    assert(scene.selected == 1,
+        "sanity: up from New Game (2) should land on Players (1), got " .. tostring(scene.selected))
 
     tap(scene, "d")
     assert(scene.player_count == 1,
         "pressing right on Players row with no controller connected should not toggle player_count, got " .. tostring(scene.player_count))
-    assert(scene.items[3] == "Players: 1",
-        "items[3] should stay 'Players: 1' with no controller connected, got " .. tostring(scene.items[3]))
+    assert(scene.items[1] == "Players: 1",
+        "items[1] should stay 'Players: 1' with no controller connected, got " .. tostring(scene.items[1]))
 
     tap(scene, "return")
     assert(scene.player_count == 1,
@@ -415,7 +433,7 @@ do
     scene:on_enter()
 
     with_joysticks({ fake_stick() }, function()
-        tap(scene, "s")
+        tap(scene, "up")
         tap(scene, "d")
         assert(scene.player_count == 2, "sanity: toggling right with a controller connected should set player_count to 2")
     end)
@@ -425,13 +443,13 @@ do
     -- real player would while heading to New Game) -- several plain
     -- update() ticks with no controller present must not touch
     -- player_count.
-    tap(scene, "up")
+    tap(scene, "s")
     scene:update(1 / 60)
     scene:update(1 / 60)
     assert(scene.player_count == 2,
         "player_count must not be silently reverted by later update() ticks with no controller present, got " .. tostring(scene.player_count))
-    assert(scene.items[3] == "Players: 2",
-        "items[3] must stay 'Players: 2' -- only an explicit toggle or confirm-time clamp may change it, got " .. tostring(scene.items[3]))
+    assert(scene.items[1] == "Players: 2",
+        "items[1] must stay 'Players: 2' -- only an explicit toggle or confirm-time clamp may change it, got " .. tostring(scene.items[1]))
 
     print("PASS: start_scene: player_count is not silently reverted by later update() ticks after navigating away from the Players row")
 end
@@ -452,10 +470,11 @@ do
 
     with_joysticks({ fake_stick() }, function()
         scene:on_enter()
-        tap(scene, "s")
+        tap(scene, "up")
         tap(scene, "d")
         assert(scene.player_count == 2, "sanity: toggling right with a controller connected should set player_count to 2")
-        tap(scene, "up")
+        tap(scene, "s")
+        assert(scene.selected == 2, "sanity: down from Players (1) with no save should land on New Game (2)")
     end)
 
     -- Controller gone by the time New Game is confirmed.
@@ -471,7 +490,7 @@ do
     print("PASS: start_scene: confirming New Game with player_count == 2 but no controller connected falls back to 1P")
 end
 
--- Test 15: confirming while the Players row (3) is selected toggles
+-- Test 15: confirming while the Players row (1) is selected toggles
 -- player_count instead of running _confirm()'s normal per-index branch --
 -- manager:switch and love.event.quit must never fire from this row.
 -- Requires a connected controller, since confirm-toggling to 2 is subject
@@ -487,9 +506,9 @@ do
     with_joysticks({ fake_stick() }, function()
         scene:on_enter()
 
-        tap(scene, "s")
-        assert(scene.selected == 3,
-            "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+        tap(scene, "up")
+        assert(scene.selected == 1,
+            "sanity: up from New Game (2) should land on Players (1), got " .. tostring(scene.selected))
 
         local quit_called = false
         local original_quit = love.event.quit
@@ -510,7 +529,7 @@ end
 
 -- Test 16: toggling Players to 2 then confirming New Game carries the value
 -- onto GameState.player_count -- start_scene.lua's _confirm branch for
--- selected == 1 runs GameState:reset() first and then assigns
+-- selected == 2 runs GameState:reset() first and then assigns
 -- GameState.player_count = self.player_count, so the toggled value survives
 -- the reset. Wrapped in with_joysticks so the initial toggle to 2 is allowed
 -- (Test 14b) and doesn't snap back before New Game is confirmed (Test 14c).
@@ -527,17 +546,17 @@ do
     with_joysticks({ fake_stick() }, function()
         scene:on_enter()
 
-        tap(scene, "s")
-        assert(scene.selected == 3,
-            "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+        tap(scene, "up")
+        assert(scene.selected == 1,
+            "sanity: up from New Game (2) should land on Players (1), got " .. tostring(scene.selected))
 
         tap(scene, "d")
         assert(scene.player_count == 2,
             "sanity: toggling right should set player_count to 2, got " .. tostring(scene.player_count))
 
-        tap(scene, "up")
-        assert(scene.selected == 1,
-            "sanity: up from Players (3) with no save should skip Continue and land back on New Game (1), got " .. tostring(scene.selected))
+        tap(scene, "s")
+        assert(scene.selected == 2,
+            "sanity: down from Players (1) with no save should skip Continue and land on New Game (2), got " .. tostring(scene.selected))
 
         tap(scene, "return")
     end)
@@ -551,8 +570,8 @@ do
 end
 
 -- Test 17: pressing up repeatedly cycles through all 5 items, still skipping
--- Continue (2) whenever there's no save -- reverse-direction complement to
--- Test 2's forward-direction cycle, now that the menu has grown to 5 items.
+-- Continue (3) whenever there's no save -- reverse-direction complement to
+-- Test 2's forward-direction cycle.
 do
     reset_fs()
     local manager = {}
@@ -561,22 +580,22 @@ do
     assert(scene._has_save == false, "sanity: _has_save should be false with no save file")
 
     tap(scene, "up")
+    assert(scene.selected == 1,
+        "pressing up from New Game (2) with no save should land on Players (1), got " .. tostring(scene.selected))
+
+    tap(scene, "up")
     assert(scene.selected == 5,
-        "pressing up from 1 with no save should wrap to Exit Game (5), got " .. tostring(scene.selected))
+        "pressing up from Players (1) should wrap to Exit Game (5), got " .. tostring(scene.selected))
 
     tap(scene, "up")
     assert(scene.selected == 4,
-        "pressing up from Exit Game (5) with no save should land on Settings (4), got " .. tostring(scene.selected))
+        "pressing up from Exit Game (5) should land on Settings (4), got " .. tostring(scene.selected))
 
     tap(scene, "up")
-    assert(scene.selected == 3,
-        "pressing up from Settings (4) with no save should land on Players (3), got " .. tostring(scene.selected))
+    assert(scene.selected == 2,
+        "pressing up from Settings (4) with no save should skip Continue and land on New Game (2), got " .. tostring(scene.selected))
 
-    tap(scene, "up")
-    assert(scene.selected == 1,
-        "pressing up from Players (3) with no save should skip Continue and wrap to New Game (1), got " .. tostring(scene.selected))
-
-    print("PASS: start_scene: up-navigation cycles 1 -> 5 -> 4 -> 3 -> 1, skipping disabled Continue")
+    print("PASS: start_scene: up-navigation cycles 2 -> 1 -> 5 -> 4 -> 2, skipping disabled Continue")
 end
 
 -- Test 18: confirming New Game with the Players toggle left at 1 still
@@ -593,7 +612,7 @@ do
     local scene = StartScene.new(manager)
     scene:on_enter()
     assert(scene.player_count == 1, "sanity: player_count should start at 1")
-    assert(scene.selected == 1, "sanity: scene should start with selected == 1")
+    assert(scene.selected == 2, "sanity: scene should start with selected == 2 (New Game) with no save")
 
     tap(scene, "return")
 
@@ -624,17 +643,17 @@ do
     with_joysticks({ fake_stick() }, function()
         scene:on_enter()
 
-        tap(scene, "s")
-        assert(scene.selected == 3,
-            "sanity: down from 1 with no save should land on Players (3), got " .. tostring(scene.selected))
+        tap(scene, "up")
+        assert(scene.selected == 1,
+            "sanity: up from New Game (2) should land on Players (1), got " .. tostring(scene.selected))
 
         tap(scene, "d")
         assert(scene.player_count == 2,
             "sanity: toggling right should set player_count to 2, got " .. tostring(scene.player_count))
 
-        tap(scene, "up")
-        assert(scene.selected == 1,
-            "sanity: up from Players (3) with no save should skip Continue and land back on New Game (1), got " .. tostring(scene.selected))
+        tap(scene, "s")
+        assert(scene.selected == 2,
+            "sanity: down from Players (1) with no save should skip Continue and land on New Game (2), got " .. tostring(scene.selected))
 
         tap(scene, "return")
     end)
@@ -668,7 +687,7 @@ do
     scene:on_enter()
     assert(scene._has_save == true, "sanity: _has_save should be true with a save file present")
 
-    scene.selected = 2
+    scene.selected = 3
     tap(scene, "return")
 
     assert(switched_with ~= nil, "manager:switch should have been called when confirming Continue")
@@ -719,12 +738,12 @@ do
         scene:on_enter()
         assert(scene._has_save == true, "sanity: _has_save should be true with a save file present")
 
-        scene.selected = 3
+        scene.selected = 1
         tap(scene, "d")
         assert(scene.player_count == 2,
             "sanity: toggling right should set player_count to 2, got " .. tostring(scene.player_count))
 
-        scene.selected = 2
+        scene.selected = 3
         tap(scene, "return")
     end)
 
@@ -766,7 +785,7 @@ do
     assert(scene._has_save == true, "sanity: _has_save should be true with a save file present")
     assert(scene.player_count == 1, "sanity: player_count toggle should default to 1")
 
-    scene.selected = 2
+    scene.selected = 3
     with_joysticks({ fake_stick() }, function()
         tap(scene, "return")
     end)
@@ -799,7 +818,7 @@ do
     local scene = StartScene.new(manager)
     scene:on_enter()
 
-    scene.selected = 2
+    scene.selected = 3
     tap(scene, "return")
 
     assert(switched_with ~= nil, "manager:switch should have been called when confirming Continue")

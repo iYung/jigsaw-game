@@ -249,7 +249,6 @@ function GameScene:on_enter()
     self.help_overlay_drawable = { draw = function() if self.help_mode then self:_draw_help_overlay() end end }
     self.drawer:add(self.help_overlay_drawable, 9)
 
-    self._hud_panel = love.graphics.newImage("assets/ui/panel_normal.png")
     self._hud_font  = love.graphics.newFont(12)
 
     self.view1 = "play"
@@ -640,9 +639,7 @@ function GameScene:_draw_hud(player, x_offset)
     local box_y = 720 - margin - box_h
 
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.draw(self._hud_panel, box_x, box_y, 0,
-        box_w / self._hud_panel:getWidth(),
-        box_h / self._hud_panel:getHeight())
+    love.graphics.rectangle("fill", box_x, box_y, box_w, box_h)
 
     love.graphics.setColor(0.1, 0.1, 0.1, 1)
     for i, hint in ipairs(hints) do

@@ -163,7 +163,7 @@ do
     tap(scene, "return")
 
     assert(switched_with ~= nil, "confirming Main Menu should call manager:switch")
-    assert(switched_with.items ~= nil and switched_with.items[1] == "New Game",
+    assert(switched_with.items ~= nil and switched_with.items[2] == "New Game",
         "manager:switch should be called with a StartScene-shaped instance (missing/mismatched .items)")
     assert(scene.is_open == false, "confirming Main Menu should close the settings overlay")
 
@@ -324,7 +324,7 @@ do
         "the fresh StartScene must not auto-fire its own confirm (New Game) just because the key that " ..
         "confirmed Main Menu is still held -- manager:switch should still have been called exactly once, got " ..
         tostring(switch_calls))
-    assert(switched_with.selected == 1, "sanity: the fresh StartScene's selection should remain at its default, row 1")
+    assert(switched_with.selected == 2, "sanity: the fresh StartScene's selection should remain at its default, row 2 (New Game)")
 
     print("PASS: settings_scene: holding the confirm key through the Main Menu -> StartScene transition does not auto-fire the new scene's default selection")
 end

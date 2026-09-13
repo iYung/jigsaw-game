@@ -4,11 +4,12 @@ local Input = {}
 Input.__index = Input
 
 function Input.new(key_map, opts)
-    local self    = setmetatable({}, Input)
-    self._map     = key_map
-    self._opts    = opts
-    self._down    = {}
-    self._pressed = {}
+    local self         = setmetatable({}, Input)
+    self._map          = key_map
+    self._opts         = opts
+    self._down         = {}
+    self._pressed      = {}
+    self._last_device  = "keyboard"
     return self
 end
 
@@ -78,22 +79,27 @@ function Input:update()
     local joysticks = scoped_joysticks(self._opts and self._opts.joystick_scope)
 
     for action, keys in pairs(self._map) do
-        local down = false
+        local key_down = false
         for _, key in ipairs(keys) do
             if love.keyboard.isDown(key) then
-                down = true
+                key_down = true
                 break
             end
         end
-        if not down then
-            down = self:_gamepad_down(action, joysticks)
-        end
+        local gamepad_active = self:_gamepad_down(action, joysticks)
+        local down = key_down or gamepad_active
+        if key_down      then self._last_device = "keyboard" end
+        if gamepad_active then self._last_device = "gamepad"  end
         if down and not self._down[action] then
             new_pressed[action] = true
         end
         self._down[action] = down
     end
     self._pressed = new_pressed
+end
+
+function Input:last_device()
+    return self._last_device
 end
 
 function Input:is_down(action)

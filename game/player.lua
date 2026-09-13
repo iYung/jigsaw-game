@@ -70,7 +70,8 @@ function Player.new(x, y, input)
     self.sprite       = Sprite.new(x, y, C.SLOT, C.SLOT)
     self.sprite.image = love.graphics.newImage("assets/player.png")
     self.input        = input or Player.build_input()
-    self.held_piece = nil
+    self.held_piece   = nil
+    self.hud_hints    = {}
     return self
 end
 
@@ -79,6 +80,82 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen, help_
     -- are edge-triggered, so skipping this while frozen would desync edge
     -- detection for whenever the player unfreezes.
     self.input:update()
+
+    -- Compute contextual HUD hints for this frame.
+    do
+        local dev    = self.input:last_device()
+        local ikey   = dev == "gamepad" and "[A]" or "[E]"
+        local rkey   = dev == "gamepad" and "[X]" or "[R]"
+        local centre = self:centre()
+        if frozen then
+            self.hud_hints = {}
+        elseif self.held_piece ~= nil then
+            local drop_target = self:drop_target()
+            local drop_blocked = false
+            if pieces then
+                for _, p in ipairs(pieces) do
+                    if p ~= self.held_piece and p.state == "grounded"
+                       and p.sprite.x == drop_target.snap_x and p.sprite.y == drop_target.snap_y then
+                        drop_blocked = true
+                        break
+                    end
+                end
+            end
+            if drop_blocked then
+                self.hud_hints = { rkey .. " Rotate" }
+            else
+                self.hud_hints = { ikey .. " Drop", rkey .. " Rotate" }
+            end
+        else
+            local near = false
+            if not near and pieces then
+                for _, piece in ipairs(pieces) do
+                    if piece.state == "grounded" then
+                        local pc = piece:centre()
+                        local dx = pc.x - centre.x
+                        local dy = pc.y - centre.y
+                        if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
+                            near = true
+                            break
+                        end
+                    end
+                end
+            end
+            if not near and boxes then
+                for _, b in ipairs(boxes) do
+                    if b.state == "waiting" then
+                        local bc = b:centre()
+                        local dx = bc.x - centre.x
+                        local dy = bc.y - centre.y
+                        if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
+                            near = true
+                            break
+                        end
+                    end
+                end
+            end
+            if not near and pile ~= nil then
+                local bc = pile:centre()
+                local dx = bc.x - centre.x
+                local dy = bc.y - centre.y
+                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then near = true end
+            end
+            if not near and wall_tile ~= nil then
+                local wc = wall_tile:centre()
+                local dx = wc.x - centre.x
+                local dy = wc.y - centre.y
+                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then near = true end
+            end
+            if not near and help_tile ~= nil then
+                local hc = help_tile:centre()
+                local dx = hc.x - centre.x
+                local dy = hc.y - centre.y
+                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then near = true end
+            end
+            self.hud_hints = near and { ikey .. " Pick up" } or {}
+        end
+    end
+
     if frozen then
         -- Frozen is driven by already being in wall view, so the wall tile
         -- itself must stay interactable here -- otherwise there'd be no way

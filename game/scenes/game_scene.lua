@@ -249,6 +249,9 @@ function GameScene:on_enter()
     self.help_overlay_drawable = { draw = function() if self.help_mode then self:_draw_help_overlay() end end }
     self.drawer:add(self.help_overlay_drawable, 9)
 
+    self._hud_panel = love.graphics.newImage("assets/ui/panel_normal.png")
+    self._hud_font  = love.graphics.newFont(12)
+
     self.view1 = "play"
     self.wall_pan1 = nil
     if GameState.player_count == 2 then
@@ -607,14 +610,47 @@ function GameScene:draw()
         love.graphics.line(640, 0, 640, 720)
     end
 
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.print("WASD: move   E: pick up / drop / help (↙)   R: rotate   ESC / Start: settings", 16, 16)
-    local c = self.player:centre()
-    love.graphics.print(string.format("player (%.0f, %.0f)", c.x, c.y), 16, 36)
-    if self.camera2 then
-        local c2 = self.player2:centre()
-        love.graphics.print(string.format("player (%.0f, %.0f)", c2.x, c2.y), 656, 36)
+    self:_draw_hud(self.player, 0)
+    if self.player2 then
+        self:_draw_hud(self.player2, 640)
     end
+end
+
+function GameScene:_draw_hud(player, x_offset)
+    local hints = player.hud_hints
+    if not hints or #hints == 0 then return end
+
+    local font = self._hud_font
+    local prev_font = love.graphics.getFont()
+    love.graphics.setFont(font)
+
+    local PAD    = 8
+    local LINE_H = font:getHeight() + 4
+
+    local max_w = 0
+    for _, hint in ipairs(hints) do
+        local lw = font:getWidth(hint)
+        if lw > max_w then max_w = lw end
+    end
+
+    local box_w = max_w + PAD * 2
+    local box_h = #hints * LINE_H + PAD * 2 - 4
+    local margin = 12
+    local box_x = x_offset + margin
+    local box_y = 720 - margin - box_h
+
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.draw(self._hud_panel, box_x, box_y, 0,
+        box_w / self._hud_panel:getWidth(),
+        box_h / self._hud_panel:getHeight())
+
+    love.graphics.setColor(0.1, 0.1, 0.1, 1)
+    for i, hint in ipairs(hints) do
+        love.graphics.print(hint, box_x + PAD, box_y + PAD + (i - 1) * LINE_H)
+    end
+
+    love.graphics.setFont(prev_font)
+    love.graphics.setColor(1, 1, 1, 1)
 end
 
 -- Forwards to Scene:on_exit() (clears self.drawer) -- GameScene doesn't chain

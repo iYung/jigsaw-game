@@ -421,8 +421,9 @@ function GameScene:update(dt)
 
     if self.view1 == "wall" then
         local dir = self.player:movement_dir()
-        self.wall_pan1.x = math.max(0, math.min(self.world_w, self.wall_pan1.x + dir.dx * C.WALL_VIEW_PAN_SPEED * dt))
-        self.wall_pan1.y = math.max(0, math.min(self.world_h, self.wall_pan1.y + dir.dy * C.WALL_VIEW_PAN_SPEED * dt))
+        local pan_min_x, pan_max_x, pan_min_y, pan_max_y = self:_wall_pan_bounds()
+        self.wall_pan1.x = math.max(pan_min_x, math.min(pan_max_x, self.wall_pan1.x + dir.dx * C.WALL_VIEW_PAN_SPEED * dt))
+        self.wall_pan1.y = math.max(pan_min_y, math.min(pan_max_y, self.wall_pan1.y + dir.dy * C.WALL_VIEW_PAN_SPEED * dt))
         self.camera:follow({x = self.wall_pan1.x, y = self.wall_pan1.y, zoom = C.WALL_VIEW_ZOOM}, 0.85)
     else
         local c = self.player:centre()
@@ -431,8 +432,9 @@ function GameScene:update(dt)
     if self.camera2 then
         if self.view2 == "wall" then
             local dir2 = self.player2:movement_dir()
-            self.wall_pan2.x = math.max(0, math.min(self.world_w, self.wall_pan2.x + dir2.dx * C.WALL_VIEW_PAN_SPEED * dt))
-            self.wall_pan2.y = math.max(0, math.min(self.world_h, self.wall_pan2.y + dir2.dy * C.WALL_VIEW_PAN_SPEED * dt))
+            local pan_min_x, pan_max_x, pan_min_y, pan_max_y = self:_wall_pan_bounds()
+            self.wall_pan2.x = math.max(pan_min_x, math.min(pan_max_x, self.wall_pan2.x + dir2.dx * C.WALL_VIEW_PAN_SPEED * dt))
+            self.wall_pan2.y = math.max(pan_min_y, math.min(pan_max_y, self.wall_pan2.y + dir2.dy * C.WALL_VIEW_PAN_SPEED * dt))
             self.camera2:follow({x = self.wall_pan2.x, y = self.wall_pan2.y, zoom = C.WALL_VIEW_ZOOM}, 0.85)
         else
             local c2 = self.player2:centre()
@@ -503,6 +505,28 @@ function GameScene:_draw_help_overlay()
         end
     end
     love.graphics.setColor(1, 1, 1, 1)
+end
+
+-- Returns pan clamp bounds [min_x, max_x, min_y, max_y] for wall view,
+-- derived from the bounding box of all completed puzzles plus a half-screen
+-- margin. Falls back to world bounds when the shelf is empty.
+function GameScene:_wall_pan_bounds()
+    if #self.completed_puzzles == 0 then
+        return 0, self.world_w, 0, self.world_h
+    end
+    local min_x, min_y = math.huge, math.huge
+    local max_x, max_y = -math.huge, -math.huge
+    for _, entry in ipairs(self.completed_puzzles) do
+        local w = entry.cols * C.SLOT
+        local h = entry.rows * C.SLOT
+        min_x = math.min(min_x, entry.x)
+        min_y = math.min(min_y, entry.y)
+        max_x = math.max(max_x, entry.x + w)
+        max_y = math.max(max_y, entry.y + h)
+    end
+    local hw = LOGICAL_W / 2
+    local hh = LOGICAL_H / 2
+    return min_x - hw, max_x + hw, min_y - hh, max_y + hh
 end
 
 -- Flips the given player's ("p1"/"p2") view between "play" and "wall".

@@ -328,4 +328,71 @@ do
     print("PASS: scene: GameScene:on_exit() calls Sound.stop_music for each bg track")
 end
 
+-- _wall_pan_bounds() returns world bounds when shelf is empty
+do
+    GameState:reset()
+    local gs = GameScene.new()
+    gs:on_enter()
+    gs.completed_puzzles = {}
+
+    local min_x, max_x, min_y, max_y = gs:_wall_pan_bounds()
+    assert(min_x == 0,          "_wall_pan_bounds min_x should be 0 with empty shelf, got " .. tostring(min_x))
+    assert(max_x == gs.world_w, "_wall_pan_bounds max_x should be world_w with empty shelf, got " .. tostring(max_x))
+    assert(min_y == 0,          "_wall_pan_bounds min_y should be 0 with empty shelf, got " .. tostring(min_y))
+    assert(max_y == gs.world_h, "_wall_pan_bounds max_y should be world_h with empty shelf, got " .. tostring(max_y))
+    print("PASS: scene: _wall_pan_bounds() returns world bounds when shelf is empty")
+end
+
+-- _wall_pan_bounds() covers negative y when puzzles are above the floor
+do
+    GameState:reset()
+    local gs = GameScene.new()
+    gs:on_enter()
+    -- Puzzle at x=0, y=-320 (5 rows tall), 2 cols wide.
+    -- Shelf bbox: x in [0, 128], y in [-320, 0].
+    -- Expected bounds (half-screen margin: 640 x, 360 y):
+    --   min_x = 0 - 640 = -640, max_x = 128 + 640 = 768
+    --   min_y = -320 - 360 = -680, max_y = 0 + 360 = 360
+    gs.completed_puzzles = {
+        {x = 0, y = -320, cols = 2, rows = 5},
+    }
+
+    local min_x, max_x, min_y, max_y = gs:_wall_pan_bounds()
+    assert(min_y < 0,
+        "_wall_pan_bounds min_y should be negative when puzzles are above the floor, got " .. tostring(min_y))
+    assert(min_y == -320 - 360,
+        "_wall_pan_bounds min_y should be puzzle_top - half_screen_h = " .. (-320 - 360) ..
+        ", got " .. tostring(min_y))
+    assert(max_y == 0 + 360,
+        "_wall_pan_bounds max_y should be puzzle_bottom + half_screen_h = 360, got " .. tostring(max_y))
+    assert(min_x == 0 - 640,
+        "_wall_pan_bounds min_x should be puzzle_left - half_screen_w = -640, got " .. tostring(min_x))
+    assert(max_x == 128 + 640,
+        "_wall_pan_bounds max_x should be puzzle_right + half_screen_w = 768, got " .. tostring(max_x))
+    print("PASS: scene: _wall_pan_bounds() covers negative y where puzzles are shelved")
+end
+
+-- _wall_pan_bounds() spans all puzzles when multiple rows are on the wall
+do
+    GameState:reset()
+    local gs = GameScene.new()
+    gs:on_enter()
+    -- Row 1: x=0..128, y=-64..0
+    -- Row 2: x=0..192, y=-192..-64
+    -- Shelf bbox: x in [0, 192], y in [-192, 0]
+    gs.completed_puzzles = {
+        {x = 0, y = -64,  cols = 2, rows = 1},
+        {x = 0, y = -192, cols = 3, rows = 2},
+    }
+
+    local min_x, max_x, min_y, max_y = gs:_wall_pan_bounds()
+    assert(min_y == -192 - 360,
+        "_wall_pan_bounds min_y should span the tallest row: " .. (-192 - 360) ..
+        ", got " .. tostring(min_y))
+    assert(max_x == 192 + 640,
+        "_wall_pan_bounds max_x should span the widest row: " .. (192 + 640) ..
+        ", got " .. tostring(max_x))
+    print("PASS: scene: _wall_pan_bounds() spans all puzzles across multiple shelf rows")
+end
+
 print("ALL TESTS PASSED")

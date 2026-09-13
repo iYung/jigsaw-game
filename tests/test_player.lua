@@ -198,16 +198,19 @@ local function make_interactive(x, y)
     }
 end
 
--- 5a: no pieces nearby -> hud_hints is empty
+-- 5a: no pieces nearby -> hud_hints is empty and _hover_pos is nil
 do
     local player = Player.new(0, 0)
     player:update(0, {}, {}, nil, nil, nil, false, nil)
     assert(#player.hud_hints == 0,
         "hud_hints should be empty when nothing is nearby and player holds nothing")
-    print("PASS: hud_hints is empty when nothing is nearby")
+    assert(player._hover_pos == nil,
+        "_hover_pos should be nil when nothing is nearby")
+    print("PASS: hud_hints is empty and _hover_pos is nil when nothing is nearby")
 end
 
--- 5b: piece within range -> hud_hints contains a pick-up hint
+-- 5b: piece within range -> hud_hints contains a pick-up hint and _hover_pos
+-- points at the piece's grid cell
 do
     local player = Player.new(0, 0)
     -- Place piece at same cell (distance 0 < 1.5*C.U)
@@ -215,7 +218,11 @@ do
     player:update(0, pieces, {}, nil, nil, nil, false, nil)
     assert(#player.hud_hints == 1 and player.hud_hints[1]:find("Pick up"),
         "hud_hints should contain a pick-up hint when a piece is nearby")
-    print("PASS: hud_hints shows pick-up hint when a piece is within range")
+    assert(player._hover_pos ~= nil,
+        "_hover_pos should be set when a piece is within range")
+    assert(player._hover_pos.x == 0 and player._hover_pos.y == 0,
+        "_hover_pos should match the piece's sprite position")
+    print("PASS: hud_hints shows pick-up hint and _hover_pos targets piece when within range")
 end
 
 -- 5c: holding a piece with a free drop target -> two hints: Drop + Rotate

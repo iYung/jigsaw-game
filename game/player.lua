@@ -72,6 +72,7 @@ function Player.new(x, y, input)
     self.input        = input or Player.build_input()
     self.held_piece   = nil
     self.hud_hints    = {}
+    self._hover_pos   = nil
     return self
 end
 
@@ -88,7 +89,8 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen, help_
         local rkey   = dev == "gamepad" and "[X]" or "[R]"
         local centre = self:centre()
         if frozen then
-            self.hud_hints = {}
+            self.hud_hints  = {}
+            self._hover_pos = nil
         elseif self.held_piece ~= nil then
             local drop_target = self:drop_target()
             local drop_blocked = false
@@ -106,53 +108,52 @@ function Player:update(dt, pieces, boxes, pile, drawer, wall_tile, frozen, help_
             else
                 self.hud_hints = { ikey .. " Drop", rkey .. " Rotate" }
             end
+            self._hover_pos = nil
         else
-            local near = false
-            if not near and pieces then
+            -- Find the nearest interactable within range, tracking its grid
+            -- position so the hover highlight and the HUD hint point at the
+            -- same object.
+            local best_dist = 1.5 * C.U
+            local best_x, best_y = nil, nil
+            local function try(cx, cy, sx, sy)
+                local dx = cx - centre.x
+                local dy = cy - centre.y
+                local dist = math.sqrt(dx * dx + dy * dy)
+                if dist <= best_dist then
+                    best_dist = dist
+                    best_x = sx
+                    best_y = sy
+                end
+            end
+            if pieces then
                 for _, piece in ipairs(pieces) do
                     if piece.state == "grounded" then
                         local pc = piece:centre()
-                        local dx = pc.x - centre.x
-                        local dy = pc.y - centre.y
-                        if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
-                            near = true
-                            break
-                        end
+                        try(pc.x, pc.y, piece.sprite.x, piece.sprite.y)
                     end
                 end
             end
-            if not near and boxes then
+            if boxes then
                 for _, b in ipairs(boxes) do
                     if b.state == "waiting" then
                         local bc = b:centre()
-                        local dx = bc.x - centre.x
-                        local dy = bc.y - centre.y
-                        if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then
-                            near = true
-                            break
-                        end
+                        try(bc.x, bc.y, b.sprite.x, b.sprite.y)
                     end
                 end
             end
-            if not near and pile ~= nil then
-                local bc = pile:centre()
-                local dx = bc.x - centre.x
-                local dy = bc.y - centre.y
-                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then near = true end
+            for _, tile in ipairs({ pile, wall_tile, help_tile }) do
+                if tile ~= nil then
+                    local tc = tile:centre()
+                    try(tc.x, tc.y, tc.x - C.U, tc.y - C.U)
+                end
             end
-            if not near and wall_tile ~= nil then
-                local wc = wall_tile:centre()
-                local dx = wc.x - centre.x
-                local dy = wc.y - centre.y
-                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then near = true end
+            if best_x ~= nil then
+                self.hud_hints  = { ikey .. " Pick up" }
+                self._hover_pos = { x = best_x, y = best_y }
+            else
+                self.hud_hints  = {}
+                self._hover_pos = nil
             end
-            if not near and help_tile ~= nil then
-                local hc = help_tile:centre()
-                local dx = hc.x - centre.x
-                local dy = hc.y - centre.y
-                if math.sqrt(dx * dx + dy * dy) <= 1.5 * C.U then near = true end
-            end
-            self.hud_hints = near and { ikey .. " Pick up" } or {}
         end
     end
 
@@ -337,9 +338,17 @@ function Player:draw()
         local drop_target = self:drop_target()
         self.held_piece:draw_ghost(drop_target.snap_x, drop_target.snap_y)
     else
-        local drop_target = self:drop_target()
+        local hx, hy
+        if self._hover_pos then
+            hx = self._hover_pos.x
+            hy = self._hover_pos.y
+        else
+            local drop_target = self:drop_target()
+            hx = drop_target.snap_x
+            hy = drop_target.snap_y
+        end
         love.graphics.setColor(1, 1, 1, 0.25)
-        love.graphics.rectangle("fill", drop_target.snap_x, drop_target.snap_y, C.SLOT, C.SLOT)
+        love.graphics.rectangle("fill", hx, hy, C.SLOT, C.SLOT)
         love.graphics.setColor(1, 1, 1, 1)
     end
     self.sprite:draw()

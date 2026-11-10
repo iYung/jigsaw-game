@@ -59,6 +59,92 @@ do
     print("PASS: scene: _spawn_box() sources spawn_from from the live pile:top_position(), not a fixed constant")
 end
 
+-- Helpers for the _spawn_box() sound tests below.
+local Sound = require("lua/core/sound")
+local JigsawBox = require("game/jigsaw_box")
+
+local function with_sound_play_spy(fn)
+    local original = Sound.play
+    local played = {}
+    Sound.play = function(name) played[#played + 1] = name end
+    local ok, err = pcall(fn, played)
+    Sound.play = original
+    if not ok then
+        error(err, 0)
+    end
+end
+
+local function count_played(played, name)
+    local n = 0
+    for _, p in ipairs(played) do
+        if p == name then n = n + 1 end
+    end
+    return n
+end
+
+-- Test 4a: a successful _spawn_box() plays "pick_up" exactly once
+do
+    GameState:reset()
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    with_sound_play_spy(function(played)
+        local before = #gs.boxes
+        gs:_spawn_box()
+        assert(#gs.boxes == before + 1,
+            "_spawn_box() should add exactly one box (had " .. before .. ", got " .. #gs.boxes .. ")")
+        assert(count_played(played, "pick_up") == 1,
+            "successful _spawn_box() should play 'pick_up' exactly once, got " .. count_played(played, "pick_up"))
+    end)
+    print("PASS: scene: successful _spawn_box() plays 'pick_up' exactly once")
+end
+
+-- Test 4b: _spawn_box() blocked by the active-puzzle cap plays nothing
+do
+    GameState:reset()
+    local gs = GameScene.new()
+    gs:on_enter()
+    GameState.active_count = GameState.MAX_ACTIVE_PUZZLES
+
+    local ok, err = pcall(function()
+        with_sound_play_spy(function(played)
+            local before = #gs.boxes
+            gs:_spawn_box()
+            assert(#gs.boxes == before,
+                "_spawn_box() at the cap should not add a box (had " .. before .. ", got " .. #gs.boxes .. ")")
+            assert(count_played(played, "pick_up") == 0,
+                "_spawn_box() at the cap should not play 'pick_up'")
+        end)
+    end)
+    GameState:reset()
+    if not ok then error(err, 0) end
+    print("PASS: scene: _spawn_box() blocked by the active-puzzle cap plays no sound")
+end
+
+-- Test 4c: _spawn_box() blocked because JigsawBox.new returns nil plays nothing
+do
+    GameState:reset()
+    local gs = GameScene.new()
+    gs:on_enter()
+
+    local original_new = JigsawBox.new
+    JigsawBox.new = function() return nil end
+    local ok, err = pcall(function()
+        with_sound_play_spy(function(played)
+            local before = #gs.boxes
+            gs:_spawn_box()
+            assert(#gs.boxes == before,
+                "_spawn_box() with nil JigsawBox.new should not add a box (had " .. before .. ", got " .. #gs.boxes .. ")")
+            assert(count_played(played, "pick_up") == 0,
+                "_spawn_box() with nil JigsawBox.new should not play 'pick_up'")
+        end)
+    end)
+    JigsawBox.new = original_new
+    GameState:reset()
+    if not ok then error(err, 0) end
+    print("PASS: scene: _spawn_box() with exhausted box pool plays no sound")
+end
+
 -- Test 5: when GameState.player_count == 2, GameScene:on_enter() spawns a
 -- second Player one grid cell to the right of Player 1, tinted a distinct
 -- color so the two are visually distinguishable in the world.

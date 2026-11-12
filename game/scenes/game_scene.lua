@@ -328,6 +328,8 @@ function GameScene:_spawn_box()
                 path = box.path,
             }
             GameState:puzzle_started()
+            -- pick_up is a stand-in until a dedicated pile_open sound exists.
+            Sound.play("pick_up")
             return
         end
     end
